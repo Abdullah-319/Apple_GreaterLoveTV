@@ -13,10 +13,23 @@ struct LiveStream: Codable, Identifiable {
     let hls_url: String?
     let thumbnail_url: String?
     let broadcasting_status: String?
+    let ingest: Ingest?
+    let playback: Playback?
     
     enum CodingKeys: String, CodingKey {
-        case _id, name, enabled, creation_time, embed_url, hls_url, thumbnail_url, broadcasting_status
+        case _id, name, enabled, creation_time, embed_url, hls_url, thumbnail_url, broadcasting_status, ingest, playback
     }
+}
+
+struct Ingest: Codable {
+    let server: String
+    let key: String
+}
+
+struct Playback: Codable {
+    let hls_url: String?
+    let embed_url: String?
+    let embed_audio_url: String?
 }
 
 struct Video: Codable, Identifiable {
@@ -28,10 +41,40 @@ struct Video: Codable, Identifiable {
     let creation_time: String
     let embed_url: String?
     let thumbnail_url: String?
+    let hls_url: String?
+    let playback: VideoPlayback?
     
     enum CodingKeys: String, CodingKey {
-        case _id, name, enabled, type, creation_time, embed_url, thumbnail_url
+        case _id, name, enabled, type, creation_time, embed_url, thumbnail_url, hls_url, playback
     }
+}
+
+struct VideoPlayback: Codable {
+    let embed_url: String?
+    let hls_url: String?
+}
+
+struct Recording: Codable, Identifiable {
+    let id = UUID()
+    let _id: String?
+    let videoFolderId: String?
+    let recordingId: String?
+    let name: String
+    let from: Int?
+    let duration: Int?
+    let bytes: Int?
+    let status: String?
+    let creationTime: String?
+    let playback: RecordingPlayback?
+    
+    enum CodingKeys: String, CodingKey {
+        case _id, videoFolderId, recordingId = "id", name, from, duration, bytes, status, creationTime, playback
+    }
+}
+
+struct RecordingPlayback: Codable {
+    let embed_url: String?
+    let hls_url: String?
 }
 
 struct Category: Identifiable {
@@ -39,14 +82,44 @@ struct Category: Identifiable {
     let name: String
     let image: String
     let color: Color
+    let videos: [Video]
 }
 
-struct Show: Identifiable {
+// MARK: - Additional Models for VOD
+struct Folder: Codable, Identifiable {
     let id = UUID()
+    let _id: String
     let name: String
-    let host: String
-    let image: String
-    let description: String
+    let description: String?
+    let created_at: String?
+    let updated_at: String?
+    let files: [VODFile]?
+    
+    enum CodingKeys: String, CodingKey {
+        case _id, name, description, created_at, updated_at, files
+    }
+}
+
+struct VODFile: Codable, Identifiable {
+    let id = UUID()
+    let _id: String
+    let name: String
+    let description: String?
+    let duration: Int?
+    let size: Int?
+    let status: String?
+    let created_at: String?
+    let thumbnail_url: String?
+    let playback: VODPlayback?
+    
+    enum CodingKeys: String, CodingKey {
+        case _id, name, description, duration, size, status, created_at, thumbnail_url, playback
+    }
+}
+
+struct VODPlayback: Codable {
+    let embed_url: String?
+    let hls_url: String?
 }
 
 // MARK: - API Service
@@ -57,6 +130,10 @@ class CastrAPIService: ObservableObject {
     
     @Published var liveStreams: [LiveStream] = []
     @Published var videos: [Video] = []
+    @Published var vodFiles: [VODFile] = []
+    @Published var folders: [Folder] = []
+    @Published var recordings: [Recording] = []
+    @Published var categories: [Category] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -67,12 +144,17 @@ class CastrAPIService: ObservableObject {
         return "Basic \(base64Credentials)"
     }
     
-    func fetchLiveStreams() {
+    func fetchAllContent() {
+        fetchLiveStreams()
+        fetchFolders()
+    }
+    
+    func fetchFolders() {
         isLoading = true
         errorMessage = nil
         
-        guard let url = URL(string: "\(baseURL)/live_streams") else {
-            loadMockData()
+        guard let url = URL(string: "\(baseURL)/folders") else {
+            handleError("Invalid URL")
             return
         }
         
@@ -82,53 +164,162 @@ class CastrAPIService: ObservableObject {
         
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
-                self?.isLoading = false
-                
                 if let error = error {
-                    print("API Error: \(error.localizedDescription)")
-                    self?.errorMessage = error.localizedDescription
-                    self?.loadMockData()
+                    self?.handleError("API Error: \(error.localizedDescription)")
                     return
                 }
                 
-                if let data = data {
+                guard let data = data else {
+                    self?.handleError("No data received")
+                    return
+                }
+                
+                do {
+                    // Try direct array decode first
+                    let folders = try JSONDecoder().decode([Folder].self, from: data)
+                    self?.folders = folders
+                    self?.fetchAllVideosFromFolders(folders)
+                    self?.isLoading = false
+                } catch {
+                    print("Folders Decoding error: \(error)")
+                    // Try to parse as object with data array
                     do {
-                        // Handle both array and object responses
                         if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                            // If response is an object, look for data array
                             if let dataArray = jsonObject["data"] as? [[String: Any]] {
                                 let jsonData = try JSONSerialization.data(withJSONObject: dataArray)
-                                let streams = try JSONDecoder().decode([LiveStream].self, from: jsonData)
-                                self?.liveStreams = streams
+                                let folders = try JSONDecoder().decode([Folder].self, from: jsonData)
+                                self?.folders = folders
+                                self?.fetchAllVideosFromFolders(folders)
+                            } else if let foldersArray = jsonObject["folders"] as? [[String: Any]] {
+                                let jsonData = try JSONSerialization.data(withJSONObject: foldersArray)
+                                let folders = try JSONDecoder().decode([Folder].self, from: jsonData)
+                                self?.folders = folders
+                                self?.fetchAllVideosFromFolders(folders)
                             } else {
-                                // If no data array, use mock data
-                                self?.loadMockData()
+                                self?.handleError("Failed to decode folders")
                             }
-                        } else if let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                            // If response is directly an array
-                            let streams = try JSONDecoder().decode([LiveStream].self, from: data)
-                            self?.liveStreams = streams
                         } else {
-                            self?.loadMockData()
+                            self?.handleError("Invalid JSON structure")
                         }
                     } catch {
-                        print("Decoding error: \(error)")
-                        self?.errorMessage = "Failed to decode streams"
-                        self?.loadMockData()
+                        self?.handleError("Parsing error: \(error.localizedDescription)")
                     }
-                } else {
-                    self?.loadMockData()
+                    self?.isLoading = false
+                }
+            }
+        }.resume()
+    }
+    
+    func fetchAllVideosFromFolders(_ folders: [Folder]) {
+        var allVODFiles: [VODFile] = []
+        
+        for folder in folders {
+            fetchFolderDetail(folderId: folder._id) { vodFiles in
+                allVODFiles.append(contentsOf: vodFiles)
+                DispatchQueue.main.async {
+                    self.vodFiles = allVODFiles
+                    self.createCategoriesFromVOD(from: allVODFiles)
+                }
+            }
+        }
+    }
+    
+    func fetchFolderDetail(folderId: String, completion: @escaping ([VODFile]) -> Void) {
+        guard let url = URL(string: "\(baseURL)/folders/\(folderId)") else {
+            completion([])
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data, error == nil else {
+                completion([])
+                return
+            }
+            
+            do {
+                let folder = try JSONDecoder().decode(Folder.self, from: data)
+                completion(folder.files ?? [])
+            } catch {
+                print("Folder detail decoding error: \(error)")
+                // Try alternate structure
+                do {
+                    if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let filesArray = jsonObject["files"] as? [[String: Any]] {
+                        let jsonData = try JSONSerialization.data(withJSONObject: filesArray)
+                        let vodFiles = try JSONDecoder().decode([VODFile].self, from: jsonData)
+                        completion(vodFiles)
+                    } else {
+                        completion([])
+                    }
+                } catch {
+                    completion([])
+                }
+            }
+        }.resume()
+    }
+    
+    func fetchLiveStreams() {
+        isLoading = true
+        errorMessage = nil
+        
+        guard let url = URL(string: "\(baseURL)/live_streams") else {
+            handleError("Invalid URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.handleError("API Error: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let data = data else {
+                    self?.handleError("No data received")
+                    return
+                }
+                
+                do {
+                    let streams = try JSONDecoder().decode([LiveStream].self, from: data)
+                    self?.liveStreams = streams.filter { $0.enabled }
+                    self?.isLoading = false
+                } catch {
+                    print("Live Streams Decoding error: \(error)")
+                    // Try to parse as object with data array
+                    do {
+                        if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           let dataArray = jsonObject["data"] as? [[String: Any]] {
+                            let jsonData = try JSONSerialization.data(withJSONObject: dataArray)
+                            let streams = try JSONDecoder().decode([LiveStream].self, from: jsonData)
+                            self?.liveStreams = streams.filter { $0.enabled }
+                        } else {
+                            self?.handleError("Failed to decode live streams")
+                        }
+                    } catch {
+                        self?.handleError("Parsing error: \(error.localizedDescription)")
+                    }
+                    self?.isLoading = false
                 }
             }
         }.resume()
     }
     
     func fetchVideos() {
-        isLoading = true
-        errorMessage = nil
-        
-        guard let url = URL(string: "\(baseURL)/videos") else {
-            loadMockVideos()
+        // This method is now deprecated, using fetchFolders instead
+        // Keeping for backward compatibility but not using
+        print("fetchVideos method deprecated - using fetchFolders instead")
+    }
+    
+    func fetchRecordings(for streamId: String) {
+        guard let url = URL(string: "\(baseURL)/live_streams/\(streamId)/recordings") else {
             return
         }
         
@@ -138,60 +329,66 @@ class CastrAPIService: ObservableObject {
         
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
-                self?.isLoading = false
+                guard let data = data, error == nil else { return }
                 
-                if let error = error {
-                    print("API Error: \(error.localizedDescription)")
-                    self?.errorMessage = error.localizedDescription
-                    self?.loadMockVideos()
-                    return
-                }
-                
-                if let data = data {
-                    do {
-                        // Handle both array and object responses
-                        if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                            // If response is an object, look for data array
-                            if let dataArray = jsonObject["data"] as? [[String: Any]] {
-                                let jsonData = try JSONSerialization.data(withJSONObject: dataArray)
-                                let videos = try JSONDecoder().decode([Video].self, from: jsonData)
-                                self?.videos = videos
-                            } else {
-                                // If no data array, use mock data
-                                self?.loadMockVideos()
-                            }
-                        } else if let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                            // If response is directly an array
-                            let videos = try JSONDecoder().decode([Video].self, from: data)
-                            self?.videos = videos
-                        } else {
-                            self?.loadMockVideos()
-                        }
-                    } catch {
-                        print("Decoding error: \(error)")
-                        self?.errorMessage = "Failed to decode videos"
-                        self?.loadMockVideos()
-                    }
-                } else {
-                    self?.loadMockVideos()
+                do {
+                    let recordings = try JSONDecoder().decode([Recording].self, from: data)
+                    self?.recordings.append(contentsOf: recordings)
+                } catch {
+                    print("Recordings Decoding error: \(error)")
                 }
             }
         }.resume()
     }
     
-    private func loadMockData() {
-        liveStreams = [
-            LiveStream(_id: "1", name: "Greater Love TV 1", enabled: true, creation_time: "2024-01-01", embed_url: nil, hls_url: nil, thumbnail_url: nil, broadcasting_status: "online"),
-            LiveStream(_id: "2", name: "Greater Love TV 2", enabled: true, creation_time: "2024-01-01", embed_url: nil, hls_url: nil, thumbnail_url: nil, broadcasting_status: "online")
+    private func createCategoriesFromVOD(from vodFiles: [VODFile]) {
+        let allFiles = vodFiles.filter { $0.status == "completed" || $0.status == "ready" }
+        
+        // Convert VODFiles to Video format for compatibility
+        let convertedVideos = allFiles.map { vodFile in
+            Video(
+                _id: vodFile._id,
+                name: vodFile.name,
+                enabled: true,
+                type: "vod",
+                creation_time: vodFile.created_at ?? "",
+                embed_url: vodFile.playback?.embed_url,
+                thumbnail_url: vodFile.thumbnail_url,
+                hls_url: vodFile.playback?.hls_url,
+                playback: VideoPlayback(
+                    embed_url: vodFile.playback?.embed_url,
+                    hls_url: vodFile.playback?.hls_url
+                )
+            )
+        }
+        
+        self.videos = convertedVideos
+        
+        categories = [
+            Category(name: "All", image: "ministry_now", color: .blue, videos: convertedVideos),
+            Category(name: "Original", image: "joni", color: .purple, videos: convertedVideos.filter { $0.type == "vod" }),
+            Category(name: "Live TV", image: "rebecca", color: .red, videos: convertedVideos.filter { $0.type == "live" }),
+            Category(name: "Movies", image: "healing", color: .green, videos: convertedVideos.filter { $0.name.lowercased().contains("movie") }),
+            Category(name: "Web Series", image: "marcus", color: .orange, videos: convertedVideos.filter { $0.name.lowercased().contains("series") })
         ]
     }
     
-    private func loadMockVideos() {
-        videos = [
-            Video(_id: "1", name: "Oasis Ministries", enabled: true, type: "vod", creation_time: "2024-01-01", embed_url: nil, thumbnail_url: nil),
-            Video(_id: "2", name: "Jessica & Micah Wynn", enabled: true, type: "vod", creation_time: "2024-01-01", embed_url: nil, thumbnail_url: nil),
-            Video(_id: "3", name: "Created To Praise", enabled: true, type: "vod", creation_time: "2024-01-01", embed_url: nil, thumbnail_url: nil)
+    private func createCategories(from videos: [Video]) {
+        let allVideos = videos
+        
+        categories = [
+            Category(name: "All", image: "ministry_now", color: .blue, videos: allVideos),
+            Category(name: "Original", image: "joni", color: .purple, videos: allVideos.filter { $0.type == "vod" }),
+            Category(name: "Live TV", image: "rebecca", color: .red, videos: allVideos.filter { $0.type == "live" }),
+            Category(name: "Movies", image: "healing", color: .green, videos: allVideos.filter { $0.name.lowercased().contains("movie") }),
+            Category(name: "Web Series", image: "marcus", color: .orange, videos: allVideos.filter { $0.name.lowercased().contains("series") })
         ]
+    }
+    
+    private func handleError(_ message: String) {
+        errorMessage = message
+        isLoading = false
+        print("Error: \(message)")
     }
 }
 
@@ -206,16 +403,15 @@ struct GreaterLoveNetworkApp: App {
     }
 }
 
-// MARK: - Content View (Main Tab Controller)
+// MARK: - Content View (Main Controller)
 struct ContentView: View {
     @StateObject private var apiService = CastrAPIService()
-    @State private var selectedTab = 0
     @State private var selectedNavItem = "HOME"
     
     var body: some View {
-        ZStack {
-            // Sticky background image
-            GeometryReader { geometry in
+        GeometryReader { geometry in
+            ZStack {
+                // Fixed background image (sticky positioning)
                 Image("background")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -223,34 +419,46 @@ struct ContentView: View {
                     .clipped()
                     .opacity(0.4)
                     .ignoresSafeArea()
-            }
-            
-            VStack(spacing: 0) {
-                // Fixed Navigation Bar
-                NavigationBar(selectedItem: $selectedNavItem)
+                    .onAppear {
+                        // If background image doesn't exist, use gradient fallback
+                    }
                 
-                // Content based on selected navigation
-                Group {
-                    switch selectedNavItem {
-                    case "HOME":
-                        HomeView()
-                            .environmentObject(apiService)
-                    case "ABOUT US":
-                        AboutView()
-                    case "ALL CATEGORIES":
-                        CategoriesView()
-                    case "CONNECT":
-                        QRCodeGridView()
-                    default:
-                        HomeView()
-                            .environmentObject(apiService)
+                // Fallback gradient background if image doesn't load
+                LinearGradient(
+                    colors: [Color.black, Color.gray.opacity(0.3), Color.black],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .opacity(0.6)
+                .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Fixed Navigation Bar
+                    NavigationBar(selectedItem: $selectedNavItem)
+                    
+                    // Scrollable Content based on selected navigation
+                    ScrollView {
+                        Group {
+                            switch selectedNavItem {
+                            case "HOME":
+                                HomeView()
+                                    .environmentObject(apiService)
+                            case "ABOUT US":
+                                AboutView()
+                            case "ALL CATEGORIES":
+                                CategoriesView()
+                                    .environmentObject(apiService)
+                            default:
+                                HomeView()
+                                    .environmentObject(apiService)
+                            }
+                        }
                     }
                 }
             }
         }
         .onAppear {
-            apiService.fetchLiveStreams()
-            apiService.fetchVideos()
+            apiService.fetchAllContent()
         }
     }
 }
@@ -259,35 +467,53 @@ struct ContentView: View {
 struct NavigationBar: View {
     @Binding var selectedItem: String
     
-    private let navItems = ["HOME", "ABOUT US", "ALL CATEGORIES", "CONNECT"]
+    private let navItems = ["HOME", "ABOUT US", "ALL CATEGORIES"]
     
     var body: some View {
         HStack {
             // Logo on the left
-            Image("tvos_logo")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 180, height: 50)
-                .padding(.leading, 80)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("GREATERLOVE")
+                    .font(.custom("Poppins-Bold", size: 18))
+                    .foregroundColor(.white)
+                    .kerning(1.5)
+                
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(height: 2)
+                    .frame(width: 140)
+                
+                Text("NETWORK")
+                    .font(.custom("Poppins-Medium", size: 10))
+                    .foregroundColor(.white)
+                    .kerning(3)
+            }
+            .padding(.leading, 60)
             
             Spacer()
             
-            // Navigation items in the center
-            HStack(spacing: 60) {
+            // Navigation items in the center-right area
+            HStack(spacing: 80) {
                 ForEach(navItems, id: \.self) { item in
                     NavigationBarButton(
                         title: item,
                         isSelected: selectedItem == item
                     ) {
-                        selectedItem = item
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            selectedItem = item
+                        }
                     }
                 }
             }
+            .padding(.trailing, 60)
             
             Spacer()
         }
-        .padding(.vertical, 20)
-        .background(Color.black.opacity(0.8))
+        .padding(.vertical, 25)
+        .background(
+            Color.black.opacity(0.95)
+        )
+        .zIndex(1)
     }
 }
 
@@ -296,92 +522,70 @@ struct NavigationBarButton: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(isSelected ? .white : .gray)
-                .underline(isSelected, color: .white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(
-                    Rectangle()
-                        .fill(Color.clear)
-                        .overlay(
-                            Rectangle()
-                                .stroke(isFocused ? Color.white.opacity(0.3) : Color.clear, lineWidth: 2)
-                                .cornerRadius(6)
-                        )
-                )
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.custom("Poppins-SemiBold", size: 14))
+                    .foregroundColor(.white)
+                    .kerning(0.5)
+                
+                // Dot indicator for selected state
+                if isSelected {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 4, height: 4)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.white.opacity(0.3) : Color.clear, lineWidth: 1)
+                    .fill(isSelected ? Color.white.opacity(0.05) : Color.clear)
+            )
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
-        .scaleEffect(isFocused ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
     }
 }
 
-// MARK: - Home View (Pixel Perfect Implementation)
+// MARK: - Home View
 struct HomeView: View {
     @EnvironmentObject var apiService: CastrAPIService
-    @State private var selectedStream: LiveStream?
+    @State private var selectedContent: Any?
     @State private var showingVideoPlayer = false
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Dark background
-                Color.black.ignoresSafeArea()
-                
-                // Background image positioned only in hero section
-                VStack(spacing: 0) {
-                    // Hero section with background image
-                    ZStack {
-                        // Background image only for hero section
-                        Image("background")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 800) // Fixed height for hero section
-                            .clipped()
-                            .opacity(0.6)
-                        
-                        // Hero content over background
-                        headerSection(geometry: geometry)
-                    }
-                    
-                    // Rest of content on solid background
-                    VStack(spacing: 80) {
-                        continueWatchingSection
-                        categoriesSection
-                        showsSection
-                        liveStreamsSection
-                    }
-                    .padding(.horizontal, 80)
-                    .padding(.bottom, 100)
-                    .background(Color.black) // Solid background for content sections
-                }
+        VStack(spacing: 0) {
+            // Hero section with main text
+            headerSection()
+            
+            // Main content sections with semi-transparent background
+            VStack(spacing: 80) {
+                continueWatchingSection
+                categoriesSection
+                showsSection
+                liveStreamsSection
             }
+            .padding(.horizontal, 80)
+            .padding(.bottom, 100)
+            .background(Color.black.opacity(0.8))
         }
-        .overlay(
-            // Top Navigation Bar
-            TopNavigationBar(selectedPage: "HOME"),
-            alignment: .top
-        )
         .sheet(isPresented: $showingVideoPlayer) {
-            if let stream = selectedStream {
+            if let stream = selectedContent as? LiveStream {
                 LiveTVPlayerView(stream: stream)
+            } else if let video = selectedContent as? Video {
+                VideoPlayerView(video: video)
             }
         }
     }
     
-    private func headerSection(geometry: GeometryProxy) -> some View {
+    private func headerSection() -> some View {
         VStack(spacing: 0) {
-            // Space for top navigation bar
+            // Space for fixed navigation bar
             Spacer()
-                .frame(height: 120)
+                .frame(height: 40)
             
             // Hero section with main text
             VStack(alignment: .leading, spacing: 0) {
@@ -390,23 +594,23 @@ struct HomeView: View {
                         // Main headline
                         VStack(alignment: .leading, spacing: 8) {
                             Text("STREAM YOUR")
-                                .font(.system(size: 72, weight: .bold, design: .default))
+                                .font(.custom("Poppins-Bold", size: 72))
                                 .foregroundColor(.white)
                                 .kerning(-2)
                             
                             Text("FAVORITE")
-                                .font(.system(size: 72, weight: .bold, design: .default))
+                                .font(.custom("Poppins-Bold", size: 72))
                                 .foregroundColor(.white)
                                 .kerning(-2)
                             
                             Text("BIBLE TEACHERS")
-                                .font(.system(size: 72, weight: .bold, design: .default))
+                                .font(.custom("Poppins-Bold", size: 72))
                                 .foregroundColor(.white)
                                 .kerning(-2)
                         }
                         
                         Text("IN ONE PLACE")
-                            .font(.system(size: 32, weight: .medium, design: .default))
+                            .font(.custom("Poppins-Medium", size: 32))
                             .foregroundColor(.white)
                             .padding(.top, 30)
                         
@@ -414,7 +618,7 @@ struct HomeView: View {
                         Button("Continue Watching") {
                             // Scroll to continue watching section
                         }
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.custom("Poppins-SemiBold", size: 18))
                         .foregroundColor(.white)
                         .padding(.horizontal, 40)
                         .padding(.vertical, 18)
@@ -427,27 +631,36 @@ struct HomeView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 80)
-                .padding(.bottom, 120)
+                .padding(.bottom, 80)
             }
         }
+        .frame(height: 500)
     }
     
     private var continueWatchingSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             HStack {
                 Text("Continue Watching")
-                    .font(.system(size: 24, weight: .medium))
+                    .font(.custom("Poppins-Medium", size: 24))
                     .foregroundColor(.white)
                 Spacer()
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 30) {
-                    ContinueWatchingCard(title: "DAYSTAR", color: Color.teal)
-                    ContinueWatchingCard(title: "CANADA", color: Color.blue)
-                    ContinueWatchingCard(title: "ESPAÑOL", color: Color.pink)
-                    ContinueWatchingCard(title: "ISRAEL", color: Color.cyan)
-                    ContinueWatchingCard(title: "ESPAÑA", color: Color.green)
+                    if apiService.isLoading || apiService.videos.isEmpty {
+                        // Show loading placeholders
+                        ForEach(0..<5, id: \.self) { _ in
+                            LoadingCard()
+                        }
+                    } else {
+                        ForEach(Array(apiService.videos.prefix(5))) { video in
+                            VideoCard(video: video) {
+                                selectedContent = video
+                                showingVideoPlayer = true
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, 40)
             }
@@ -457,16 +670,21 @@ struct HomeView: View {
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             Text("Categories")
-                .font(.system(size: 24, weight: .medium))
+                .font(.custom("Poppins-Medium", size: 24))
                 .foregroundColor(.white)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 30) {
-                    CategoryCard(title: "All", subtitle: "All", imageName: "ministry_now")
-                    CategoryCard(title: "Original", subtitle: "Original", imageName: "joni")
-                    CategoryCard(title: "Live TV", subtitle: "Live TV", imageName: "rebecca")
-                    CategoryCard(title: "Movies", subtitle: "Movies", imageName: "healing")
-                    CategoryCard(title: "Web Series", subtitle: "Web Series", imageName: "marcus")
+                    if apiService.isLoading || apiService.categories.isEmpty {
+                        // Show loading placeholders
+                        ForEach(0..<5, id: \.self) { _ in
+                            LoadingCategoryCard()
+                        }
+                    } else {
+                        ForEach(apiService.categories) { category in
+                            CategoryCard(category: category)
+                        }
+                    }
                 }
                 .padding(.horizontal, 40)
             }
@@ -476,41 +694,28 @@ struct HomeView: View {
     private var showsSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             Text("Shows")
-                .font(.system(size: 24, weight: .medium))
+                .font(.custom("Poppins-Medium", size: 24))
                 .foregroundColor(.white)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 50) {
-                    ShowCircleCard(
-                        name: "Oasis Ministries",
-                        host: "Anthony & Sheila Wynn",
-                        color: Color.blue
-                    )
-                    ShowCircleCard(
-                        name: "Jessica & Micah Wynn",
-                        host: "Lead by The Word",
-                        color: Color.purple
-                    )
-                    ShowCircleCard(
-                        name: "Created To Praise",
-                        host: "Tim Hill",
-                        color: Color.green
-                    )
-                    ShowCircleCard(
-                        name: "Manna-Fest",
-                        host: "Perry Stone",
-                        color: Color.orange
-                    )
-                    ShowCircleCard(
-                        name: "Pace Assembly",
-                        host: "Joey And Rita Rogers",
-                        color: Color.red
-                    )
-                    ShowCircleCard(
-                        name: "Word Of Life Ministry",
-                        host: "Dr. Caesar Kalinowski",
-                        color: Color.cyan
-                    )
+                    if apiService.isLoading || apiService.videos.isEmpty {
+                        // Show loading placeholders
+                        ForEach(0..<6, id: \.self) { index in
+                            LoadingShowCard(color: [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan][index])
+                        }
+                    } else {
+                        ForEach(Array(apiService.videos.prefix(6).enumerated()), id: \.element.id) { index, video in
+                            let colors: [Color] = [.blue, .purple, .green, .orange, .red, .cyan]
+                            ShowCircleCard(
+                                video: video,
+                                color: colors[index % colors.count]
+                            ) {
+                                selectedContent = video
+                                showingVideoPlayer = true
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, 40)
             }
@@ -520,29 +725,24 @@ struct HomeView: View {
     private var liveStreamsSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             Text("Live Streams Show")
-                .font(.system(size: 24, weight: .medium))
+                .font(.custom("Poppins-Medium", size: 24))
                 .foregroundColor(.white)
             
             HStack(spacing: 60) {
-                LiveStreamCard(
-                    title: "GREATER LOVE TV",
-                    number: "1",
-                    subtitle: "Greater Love Tv I"
-                ) {
-                    if let firstStream = apiService.liveStreams.first {
-                        selectedStream = firstStream
-                        showingVideoPlayer = true
-                    }
-                }
-                
-                LiveStreamCard(
-                    title: "GREATER LOVE TV",
-                    number: "2",
-                    subtitle: "Greater Love Tv II"
-                ) {
-                    if apiService.liveStreams.count > 1 {
-                        selectedStream = apiService.liveStreams[1]
-                        showingVideoPlayer = true
+                if apiService.isLoading || apiService.liveStreams.isEmpty {
+                    // Show loading placeholders
+                    LoadingLiveStreamCard(number: "1", subtitle: "Greater Love Tv I")
+                    LoadingLiveStreamCard(number: "2", subtitle: "Greater Love Tv II")
+                } else {
+                    ForEach(Array(apiService.liveStreams.prefix(2).enumerated()), id: \.element.id) { index, stream in
+                        LiveStreamCard(
+                            stream: stream,
+                            number: "\(index + 1)",
+                            subtitle: "Greater Love Tv \(index == 0 ? "I" : "II")"
+                        ) {
+                            selectedContent = stream
+                            showingVideoPlayer = true
+                        }
                     }
                 }
                 
@@ -553,180 +753,295 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Top Navigation Bar Component
-struct TopNavigationBar: View {
-    let selectedPage: String
-    @State private var selectedTab = ""
-    
-    init(selectedPage: String) {
-        self.selectedPage = selectedPage
-        self._selectedTab = State(initialValue: selectedPage)
-    }
-    
+// MARK: - About View
+struct AboutView: View {
     var body: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 80) {
+            // Space for fixed navigation bar
             Spacer()
+                .frame(height: 40)
             
-            // Centered Logo
-            Image("tvos_logo")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 180, height: 50)
-            
-            Spacer()
-        }
-        .padding(.horizontal, 80)
-        .padding(.vertical, 20)
-        .background(Color.black.opacity(0.8))
-        
-        // Navigation Menu Below Logo
-        HStack(spacing: 0) {
-            Spacer()
-            
-            HStack(spacing: 60) {
-                NavigationMenuButton(
-                    title: "HOME",
-                    isSelected: selectedTab == "HOME"
-                ) {
-                    selectedTab = "HOME"
-                    // Navigate to home
-                }
+            // About content sections
+            VStack(spacing: 100) {
+                // Hero section
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .overlay(
+                        VStack(spacing: 20) {
+                            Text("ABOUT GREATER LOVE")
+                                .font(.system(size: 48, weight: .bold))
+                                .foregroundColor(.white)
+                            Text("NETWORK TV")
+                                .font(.system(size: 48, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    )
+                    .cornerRadius(12)
+                    .padding(.horizontal, 80)
                 
-                NavigationMenuButton(
-                    title: "ABOUT US",
-                    isSelected: selectedTab == "ABOUT US"
-                ) {
-                    selectedTab = "ABOUT US"
-                    // Navigate to about
+                // Mission & Vision
+                HStack(alignment: .top, spacing: 80) {
+                    VStack(alignment: .leading, spacing: 30) {
+                        Text("OUR MISSION & VISION")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("Greater Love Network Television has a singular goal; to reach souls with the good news of Jesus Christ.")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineSpacing(8)
+                        
+                        Text("We seek out every available means of distribution to a world in need of hope. With an extensive blend of interdenominational and multi-cultural programming, we are committed to producing and providing quality television that will reach our viewers, refresh their lives, and renew their hearts.")
+                            .font(.system(size: 18))
+                            .foregroundColor(.gray)
+                            .lineSpacing(6)
+                        
+                        Button("CONTACT US") {
+                            // Action
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 15)
+                        .background(Color.red)
+                        .cornerRadius(8)
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Rectangle()
+                        .fill(Color.blue.opacity(0.3))
+                        .aspectRatio(4/3, contentMode: .fit)
+                        .frame(maxWidth: 400)
+                        .cornerRadius(12)
                 }
+                .padding(.horizontal, 80)
                 
-                NavigationMenuButton(
-                    title: "ALL CATEGORIES",
-                    isSelected: selectedTab == "ALL CATEGORIES"
-                ) {
-                    selectedTab = "ALL CATEGORIES"
-                    // Navigate to categories
+                // Donation Section
+                VStack(spacing: 40) {
+                    Text("DONATE NOW")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("HELP OTHERS STAND STRONG IN FAITH")
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Around the world, and right where you live, people are desperate for something that will bring them peace, purpose, and a buffer from the confusion all around them. Of course, the only answer is Jesus. And here at Greater Love Network, through the partnership of friends like you, we're taking the message of His salvation and hope to millions every day.")
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 100)
+                    
+                    VStack(spacing: 20) {
+                        HStack {
+                            Text("GREATERLOVE")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(height: 2)
+                                .frame(width: 100)
+                            Text("NETWORK")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white)
+                                .kerning(1)
+                        }
+                        
+                        Text("THANK YOU FOR STANDING WITH US!")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white)
+                        
+                        Button("DONATE NOW") {
+                            // Action
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 40)
+                        .padding(.vertical, 15)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                        .buttonStyle(PlainButtonStyle())
+                    }
                 }
+                .padding(80)
+                .background(Color.black.opacity(0.9))
             }
-            
-            Spacer()
         }
-        .padding(.horizontal, 80)
-        .padding(.vertical, 15)
-        .background(Color.black.opacity(0.6))
+        .background(Color.black.opacity(0.8))
     }
 }
 
-// MARK: - Navigation Menu Button
-struct NavigationMenuButton: View {
-    let title: String
-    let isSelected: Bool
+// MARK: - Categories View
+struct CategoriesView: View {
+    @EnvironmentObject var apiService: CastrAPIService
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 80) {
+            // Space for fixed navigation bar
+            Spacer()
+                .frame(height: 40)
+            
+            // Categories title and grid
+            VStack(alignment: .leading, spacing: 60) {
+                Text("ALL CATEGORIES")
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 80)
+                
+                if apiService.isLoading || apiService.categories.isEmpty {
+                    // Loading state
+                    VStack(spacing: 50) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            HStack(spacing: 50) {
+                                ForEach(0..<4, id: \.self) { _ in
+                                    LoadingCategoryCard()
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 80)
+                        }
+                    }
+                } else {
+                    // Dynamic content
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: 50),
+                        GridItem(.flexible(), spacing: 50),
+                        GridItem(.flexible(), spacing: 50),
+                        GridItem(.flexible(), spacing: 50)
+                    ], spacing: 50) {
+                        ForEach(apiService.categories) { category in
+                            CategoryDetailCard(category: category)
+                        }
+                    }
+                    .padding(.horizontal, 80)
+                }
+            }
+        }
+        .background(Color.black.opacity(0.8))
+    }
+}
+
+// MARK: - Card Components
+struct VideoCard: View {
+    let video: Video
     let action: () -> Void
-    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(isSelected ? .white : .gray)
-                .underline(isSelected, color: .white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(
+            VStack(spacing: 15) {
+                AsyncImage(url: URL(string: video.thumbnail_url ?? "")) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
                     Rectangle()
-                        .fill(Color.clear)
+                        .fill(Color.gray.opacity(0.6))
                         .overlay(
-                            Rectangle()
-                                .stroke(isFocused ? Color.white.opacity(0.3) : Color.clear, lineWidth: 2)
-                                .cornerRadius(6)
+                            Image(systemName: "play.circle")
+                                .font(.system(size: 40))
+                                .foregroundColor(.white)
                         )
-                )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
-        .scaleEffect(isFocused ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
-    }
-}
-
-// MARK: - Enhanced Card Components
-struct ContinueWatchingCard: View {
-    let title: String
-    let color: Color
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        Button(action: {}) {
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                }
                 .frame(width: 300, height: 170)
-                .overlay(
-                    VStack {
-                        Spacer()
-                        Text(title)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.5), radius: 2)
-                        Spacer()
-                    }
-                )
                 .cornerRadius(12)
-                .scaleEffect(isFocused ? 1.05 : 1.0)
-                .shadow(color: isFocused ? .white.opacity(0.3) : .clear, radius: 8)
-                .animation(.easeInOut(duration: 0.15), value: isFocused)
+                .clipped()
+                
+                Text(video.name)
+                    .font(.custom("Poppins-Medium", size: 16))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 300)
+            }
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
     }
 }
 
 struct CategoryCard: View {
-    let title: String
-    let subtitle: String
-    let imageName: String
-    @FocusState private var isFocused: Bool
+    let category: Category
     
     var body: some View {
         Button(action: {}) {
             VStack(spacing: 15) {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.8))
+                    .fill(
+                        LinearGradient(
+                            colors: [category.color, category.color.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 280, height: 158)
                     .overlay(
-                        // Placeholder for actual image
-                        Text(title)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
+                        VStack {
+                            Text(category.name)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                            
+                            Text("\(category.videos.count) videos")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
                     )
                     .cornerRadius(8)
                 
-                Text(subtitle)
+                Text(category.name)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white)
             }
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .shadow(color: isFocused ? .white.opacity(0.3) : .clear, radius: 8)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
+    }
+}
+
+struct CategoryDetailCard: View {
+    let category: Category
+    
+    var body: some View {
+        Button(action: {}) {
+            VStack(spacing: 15) {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [category.color, category.color.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 280, height: 158)
+                    .overlay(
+                        VStack {
+                            Text(category.name)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                            
+                            Text("\(category.videos.count) videos")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    )
+                    .cornerRadius(8)
+                
+                Text(category.name)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
 struct ShowCircleCard: View {
-    let name: String
-    let host: String
+    let video: Video
     let color: Color
-    @FocusState private var isFocused: Bool
+    let action: () -> Void
     
     var body: some View {
-        Button(action: {}) {
+        Button(action: action) {
             VStack(spacing: 20) {
                 // Circular show image
                 Circle()
@@ -743,43 +1058,38 @@ struct ShowCircleCard: View {
                             .stroke(Color.white, lineWidth: 3)
                     )
                     .overlay(
-                        // Placeholder initials
-                        Text(String(name.prefix(2)))
+                        // Show initials from video name
+                        Text(String(video.name.prefix(2).uppercased()))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.white)
                     )
                 
                 VStack(spacing: 8) {
-                    Text(name)
+                    Text(video.name)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .frame(width: 140)
                     
-                    Text(host)
+                    Text(video.type.uppercased())
                         .font(.system(size: 12, weight: .regular))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .frame(width: 140)
                 }
             }
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .shadow(color: isFocused ? .white.opacity(0.3) : .clear, radius: 8)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
     }
 }
 
 struct LiveStreamCard: View {
-    let title: String
+    let stream: LiveStream
     let number: String
     let subtitle: String
     let action: () -> Void
-    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
@@ -799,252 +1109,148 @@ struct LiveStreamCard: View {
                     .frame(width: 440, height: 248)
                     .overlay(
                         VStack(spacing: 10) {
-                            Text(title)
+                            Text("GREATER LOVE TV")
                                 .font(.system(size: 22, weight: .bold))
                                 .foregroundColor(.white)
                             
                             Text(number)
                                 .font(.system(size: 96, weight: .bold))
                                 .foregroundColor(.white)
+                            
+                            // Live status indicator
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(stream.broadcasting_status == "online" ? Color.green : Color.red)
+                                    .frame(width: 8, height: 8)
+                                
+                                Text(stream.broadcasting_status?.uppercased() ?? "OFFLINE")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
                         }
                     )
                     .cornerRadius(12)
                 
-                Text(subtitle)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.white)
-            }
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .shadow(color: isFocused ? .white.opacity(0.3) : .clear, radius: 8)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
-    }
-}
-
-// MARK: - Navigation Components
-struct NavigationButton: View {
-    let title: String
-    let isSelected: Bool
-    
-    var body: some View {
-        Text(title)
-            .font(.system(size: 16, weight: .medium))
-            .foregroundColor(isSelected ? .white : .gray)
-            .underline(isSelected, color: .white)
-    }
-}
-
-// MARK: - About View
-struct AboutView: View {
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 80) {
-                // Space for top navigation bar
-                Spacer()
-                    .frame(height: 140)
-                
-                // About content sections
-                VStack(spacing: 100) {
-                    // Hero section
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .aspectRatio(16/9, contentMode: .fit)
-                        .overlay(
-                            VStack(spacing: 20) {
-                                Text("ABOUT GREATER LOVE")
-                                    .font(.system(size: 48, weight: .bold))
-                                    .foregroundColor(.white)
-                                Text("NETWORK TV")
-                                    .font(.system(size: 48, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                        )
-                        .cornerRadius(12)
-                        .padding(.horizontal, 80)
-                    
-                    // Mission & Vision
-                    HStack(alignment: .top, spacing: 80) {
-                        VStack(alignment: .leading, spacing: 30) {
-                            Text("OUR MISSION & VISION")
-                                .font(.system(size: 28, weight: .bold))
-                                .foregroundColor(.white)
-                            
-                            Text("Greater Love Network Television has a singular goal; to reach souls with the good news of Jesus Christ.")
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundColor(.white)
-                                .lineSpacing(8)
-                            
-                            Text("We seek out every available means of distribution to a world in need of hope. With an extensive blend of interdenominational and multi-cultural programming, we are committed to producing and providing quality television that will reach our viewers, refresh their lives, and renew their hearts.")
-                                .font(.system(size: 18))
-                                .foregroundColor(.gray)
-                                .lineSpacing(6)
-                            
-                            Button("CONTACT US") {
-                                // Action
-                            }
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 30)
-                            .padding(.vertical, 15)
-                            .background(Color.red)
-                            .cornerRadius(8)
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        Rectangle()
-                            .fill(Color.blue.opacity(0.3))
-                            .aspectRatio(4/3, contentMode: .fit)
-                            .frame(maxWidth: 400)
-                            .cornerRadius(12)
-                    }
-                    .padding(.horizontal, 80)
-                }
-            }
-        }
-        .background(Color.black)
-        .overlay(
-            TopNavigationBar(selectedPage: "ABOUT US"),
-            alignment: .top
-        )
-    }
-}
-
-// MARK: - Categories View
-struct CategoriesView: View {
-    private let categoryGrid = [
-        [("All", "ministry_now"), ("Original", "joni"), ("Live TV", "rebecca"), ("Movies", "healing")],
-        [("Web Series", "marcus"), ("Documentaries", "healing"), ("Kids", "rebecca"), ("Music", "joni")],
-        [("Spanish", "marcus"), ("Teaching", "ministry_now"), ("Worship", "rebecca"), ("News", "healing")],
-        [("Family", "joni"), ("Youth", "marcus"), ("Conferences", "ministry_now"), ("Special", "rebecca")]
-    ]
-    
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 80) {
-                // Space for top navigation bar
-                Spacer()
-                    .frame(height: 140)
-                
-                // Categories title and grid
-                VStack(alignment: .leading, spacing: 60) {
-                    Text("ALL CATEGORIES")
-                        .font(.system(size: 36, weight: .bold))
+                VStack(spacing: 5) {
+                    Text(subtitle)
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 80)
                     
-                    VStack(spacing: 50) {
-                        ForEach(0..<categoryGrid.count, id: \.self) { rowIndex in
-                            HStack(spacing: 50) {
-                                ForEach(0..<categoryGrid[rowIndex].count, id: \.self) { columnIndex in
-                                    let category = categoryGrid[rowIndex][columnIndex]
-                                    CategoryCard(
-                                        title: category.0,
-                                        subtitle: category.0,
-                                        imageName: category.1
-                                    )
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal, 80)
-                        }
-                    }
+                    Text(stream.name)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
                 }
             }
-        }
-        .background(Color.black)
-        .overlay(
-            TopNavigationBar(selectedPage: "ALL CATEGORIES"),
-            alignment: .top
-        )
-    }
-}
-
-// MARK: - QR Code Grid View
-struct QRCodeGridView: View {
-    private let qrCodes = [
-        ("Donate", "Generate QR for donations"),
-        ("Tell Your Story", "Share your testimony"),
-        ("Prayer Request", "Submit prayer requests"),
-        ("Download Mobile App", "Get the mobile app")
-    ]
-    
-    var body: some View {
-        VStack(spacing: 80) {
-            // Space for top navigation bar
-            Spacer()
-                .frame(height: 140)
-            
-            // QR Code Grid
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 80),
-                GridItem(.flexible(), spacing: 80)
-            ], spacing: 100) {
-                ForEach(0..<qrCodes.count, id: \.self) { index in
-                    QRCodeView(title: qrCodes[index].0)
-                }
-            }
-            .padding(.horizontal, 120)
-            
-            Spacer()
-        }
-        .background(Color.black)
-        .overlay(
-            TopNavigationBar(selectedPage: "CONNECT"),
-            alignment: .top
-        )
-    }
-}
-
-// MARK: - QR Code Component
-struct QRCodeView: View {
-    let title: String
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        Button(action: {
-            // Handle QR code action
-        }) {
-            VStack(spacing: 30) {
-                // QR Code placeholder
-                Rectangle()
-                    .fill(Color.white)
-                    .frame(width: 280, height: 280)
-                    .overlay(
-                        // Simple QR code pattern simulation
-                        VStack(spacing: 3) {
-                            ForEach(0..<15, id: \.self) { row in
-                                HStack(spacing: 3) {
-                                    ForEach(0..<15, id: \.self) { col in
-                                        Rectangle()
-                                            .fill(Bool.random() ? Color.black : Color.white)
-                                            .frame(width: 16, height: 16)
-                                    }
-                                }
-                            }
-                        }
-                    )
-                    .cornerRadius(12)
-                
-                Text(title)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-            }
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .shadow(color: isFocused ? .white.opacity(0.3) : .clear, radius: 8)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
+    }
+}
+
+// MARK: - Loading Components
+struct LoadingCard: View {
+    var body: some View {
+        VStack(spacing: 15) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 300, height: 170)
+                .cornerRadius(12)
+                .overlay(
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                )
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 200, height: 20)
+                .cornerRadius(4)
+        }
+    }
+}
+
+struct LoadingCategoryCard: View {
+    var body: some View {
+        VStack(spacing: 15) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 280, height: 158)
+                .cornerRadius(8)
+                .overlay(
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                )
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 120, height: 16)
+                .cornerRadius(4)
+        }
+    }
+}
+
+struct LoadingShowCard: View {
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Circle()
+                .fill(color.opacity(0.4))
+                .frame(width: 140, height: 140)
+                .overlay(
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                )
+            
+            VStack(spacing: 8) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 120, height: 16)
+                    .cornerRadius(4)
+                
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 80, height: 12)
+                    .cornerRadius(4)
+            }
+        }
+    }
+}
+
+struct LoadingLiveStreamCard: View {
+    let number: String
+    let subtitle: String
+    
+    var body: some View {
+        VStack(spacing: 25) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 440, height: 248)
+                .overlay(
+                    VStack(spacing: 10) {
+                        Text("GREATER LOVE TV")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        Text(number)
+                            .font(.system(size: 96, weight: .bold))
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    }
+                )
+                .cornerRadius(12)
+            
+            Text(subtitle)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.white.opacity(0.7))
+        }
     }
 }
 
 // MARK: - Video Player Views
 struct VideoPlayerView: View {
-    let videoURL: String?
+    let video: Video
     @State private var player: AVPlayer?
     @Environment(\.presentationMode) var presentationMode
     
@@ -1052,7 +1258,8 @@ struct VideoPlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            if let urlString = videoURL, let url = URL(string: urlString) {
+            if let hlsURL = video.hls_url ?? video.playback?.hls_url,
+               let url = URL(string: hlsURL) {
                 VideoPlayer(player: player)
                     .onAppear {
                         player = AVPlayer(url: url)
@@ -1062,19 +1269,54 @@ struct VideoPlayerView: View {
                         player?.pause()
                         player = nil
                     }
+            } else if let embedURL = video.embed_url ?? video.playback?.embed_url,
+                      let url = URL(string: embedURL) {
+                // For embed URLs, show a web view or custom player
+                VStack(spacing: 40) {
+                    Image(systemName: "play.rectangle")
+                        .font(.system(size: 120))
+                        .foregroundColor(.blue)
+                    
+                    Text(video.name)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Video Content")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.gray)
+                    
+                    Button("Open in Browser") {
+                        if let url = URL(string: embedURL) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 30)
+                    .padding(.vertical, 15)
+                    .background(Color.blue)
+                    .cornerRadius(8)
+                    .buttonStyle(PlainButtonStyle())
+                }
             } else {
                 VStack(spacing: 30) {
-                    Image(systemName: "play.circle")
+                    Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 100))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.orange)
                     
                     Text("Video not available")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundColor(.gray)
+                    
+                    Text(video.name)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
                 }
             }
             
-            // Back button overlay
+            // Enhanced controls overlay
             VStack {
                 HStack {
                     Button("Back") {
@@ -1089,6 +1331,20 @@ struct VideoPlayerView: View {
                     .buttonStyle(PlainButtonStyle())
                     
                     Spacer()
+                    
+                    VStack(alignment: .trailing) {
+                        Text(video.name)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        Text(video.type.uppercased())
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.horizontal, 25)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(8)
                 }
                 Spacer()
             }
@@ -1106,7 +1362,8 @@ struct LiveTVPlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            if let hlsURL = stream.hls_url, let url = URL(string: hlsURL) {
+            if let hlsURL = stream.hls_url ?? stream.playback?.hls_url,
+               let url = URL(string: hlsURL) {
                 VideoPlayer(player: player)
                     .onAppear {
                         player = AVPlayer(url: url)
@@ -1116,6 +1373,47 @@ struct LiveTVPlayerView: View {
                         player?.pause()
                         player = nil
                     }
+            } else if let embedURL = stream.embed_url ?? stream.playback?.embed_url,
+                      let url = URL(string: embedURL) {
+                // Show embedded player interface
+                VStack(spacing: 40) {
+                    Image(systemName: "tv.circle")
+                        .font(.system(size: 120))
+                        .foregroundColor(.red)
+                    
+                    Text(stream.name)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("Live Stream")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.gray)
+                    
+                    if let status = stream.broadcasting_status {
+                        HStack(spacing: 15) {
+                            Circle()
+                                .fill(status == "online" ? Color.green : Color.red)
+                                .frame(width: 16, height: 16)
+                            
+                            Text(status.capitalized)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    
+                    Button("Open Stream") {
+                        if let url = URL(string: embedURL) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 30)
+                    .padding(.vertical, 15)
+                    .background(Color.red)
+                    .cornerRadius(8)
+                    .buttonStyle(PlainButtonStyle())
+                }
             } else {
                 // Enhanced fallback view
                 VStack(spacing: 40) {
@@ -1164,6 +1462,9 @@ struct LiveTVPlayerView: View {
                                 Text("Streaming Content")
                                     .font(.system(size: 28, weight: .medium))
                                     .foregroundColor(.white)
+                                Text(stream.name)
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
                             }
                         )
                         .cornerRadius(16)
@@ -1186,102 +1487,32 @@ struct LiveTVPlayerView: View {
                     
                     Spacer()
                     
-                    Text(stream.name)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 25)
-                        .padding(.vertical, 12)
-                        .background(Color.black.opacity(0.8))
-                        .cornerRadius(8)
+                    VStack(alignment: .trailing) {
+                        Text(stream.name)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        if let status = stream.broadcasting_status {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(status == "online" ? Color.green : Color.red)
+                                    .frame(width: 8, height: 8)
+                                
+                                Text(status.uppercased())
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 25)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(8)
                 }
                 
                 Spacer()
             }
             .padding(50)
         }
-    }
-}
-
-// MARK: - Settings View (Enhanced)
-struct SettingsView: View {
-    @State private var autoPlay = true
-    @State private var highQuality = true
-    @State private var notifications = true
-    @State private var parentalControls = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 60) {
-            // Space for top navigation bar
-            Spacer()
-                .frame(height: 140)
-            
-            Text("Settings")
-                .font(.system(size: 36, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.bottom, 20)
-            
-            VStack(alignment: .leading, spacing: 40) {
-                SettingRow(title: "Auto Play", isOn: $autoPlay)
-                SettingRow(title: "High Quality Streaming", isOn: $highQuality)
-                SettingRow(title: "Push Notifications", isOn: $notifications)
-                SettingRow(title: "Parental Controls", isOn: $parentalControls)
-            }
-            
-            Spacer()
-        }
-        .padding(80)
-        .background(Color.black)
-        .overlay(
-            TopNavigationBar(selectedPage: "SETTINGS"),
-            alignment: .top
-        )
-    }
-}
-
-struct SettingRow: View {
-    let title: String
-    @Binding var isOn: Bool
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 22, weight: .medium))
-                .foregroundColor(.white)
-            
-            Spacer()
-            
-            Toggle("", isOn: $isOn)
-                .toggleStyle(SwitchToggleStyle())
-                .accentColor(.red)
-                .scaleEffect(1.2)
-                .focused($isFocused)
-        }
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isFocused ? Color.white.opacity(0.3) : Color.clear, lineWidth: 2)
-                .fill(Color.clear)
-        )
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
-    }
-}
-
-// MARK: - Enhanced Focus Management and Accessibility
-extension View {
-    func tvOSFocusable() -> some View {
-        self.buttonStyle(PlainButtonStyle())
-    }
-    
-    func tvOSCard() -> some View {
-        self.buttonStyle(CardButtonStyle())
-    }
-}
-
-struct CardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
