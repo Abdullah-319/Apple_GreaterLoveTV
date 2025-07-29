@@ -1,4 +1,669 @@
-import SwiftUI
+// MARK: - Loading Components
+struct LoadingCard: View {
+    var body: some View {
+        VStack(spacing: 15) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 300, height: 170)
+                .cornerRadius(12)
+                .overlay(
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                )
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 200, height: 20)
+                .cornerRadius(4)
+        }
+    }
+}
+
+struct LoadingCategoryCard: View {
+    var body: some View {
+        VStack(spacing: 15) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 280, height: 158)
+                .cornerRadius(8)
+                .overlay(
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                )
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 120, height: 16)
+                .cornerRadius(4)
+        }
+    }
+}
+
+struct LoadingShowCard: View {
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Circle()
+                .fill(color.opacity(0.4))
+                .frame(width: 140, height: 140)
+                .overlay(
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                )
+            
+            VStack(spacing: 8) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 120, height: 16)
+                    .cornerRadius(4)
+                
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 80, height: 12)
+                    .cornerRadius(4)
+            }
+        }
+    }
+}
+
+struct LoadingLiveStreamCard: View {
+    let number: String
+    let subtitle: String
+    
+    var body: some View {
+        VStack(spacing: 25) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.4))
+                .frame(width: 440, height: 248)
+                .overlay(
+                    VStack(spacing: 10) {
+                        Text("GREATER LOVE TV")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        Text(number)
+                            .font(.system(size: 96, weight: .bold))
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    }
+                )
+                .cornerRadius(12)
+            
+            Text(subtitle)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.white.opacity(0.7))
+        }
+    }
+}
+
+// MARK: - Video Player Views with proper buffering state handling
+struct VideoDataPlayerView: View {
+    let videoData: VideoData
+    @State private var player: AVPlayer?
+    @State private var mp4URL: String?
+    @State private var isLoadingVideo = true
+    @State private var isBuffering = false
+    @State private var playerTimeObserver: Any?
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            if isLoadingVideo {
+                VStack(spacing: 20) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(2)
+                    
+                    Text("Loading video...")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.white)
+                    
+                    Text(videoData.fileName)
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+            } else if let mp4URL = mp4URL, let url = URL(string: mp4URL) {
+                // Play the video directly (supports both MP4 and HLS)
+                VideoPlayer(player: player)
+                    .onAppear {
+                        print("Starting video playback: \(mp4URL)")
+                        setupPlayer(with: url)
+                    }
+                    .onDisappear {
+                        print("Stopping video playback")
+                        cleanupPlayer()
+                    }
+                    .overlay(
+                        // Show buffering only when actually buffering
+                        Group {
+                            if isBuffering {
+                                VStack {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(1.5)
+                                    
+                                    Text("Buffering...")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .padding(.top, 10)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(Color.black.opacity(0.7))
+                            }
+                        }
+                    )
+            } else if let embedURL = videoData.playback?.embed_url,
+                      let url = URL(string: embedURL) {
+                // Fallback to embed player
+                VStack(spacing: 40) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 120))
+                        .foregroundColor(.blue)
+                    
+                    Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    
+                    if let duration = videoData.mediaInfo?.durationMins {
+                        Text("Duration: \(duration) minutes")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    
+                    VStack(spacing: 20) {
+                        Text("Video Content")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        CTAButton(title: "Open in Browser") {
+                            UIApplication.shared.open(url)
+                        }
+                        
+                        CTAButton(title: "Play Embedded") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+            } else {
+                VStack(spacing: 40) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 100))
+                        .foregroundColor(.orange)
+                    
+                    Text("Video not available")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.gray)
+                    
+                    Text(videoData.fileName)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    
+                    Text("The video content is currently unavailable or the embed URL is missing.")
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 60)
+                }
+            }
+            
+            // Enhanced controls overlay
+            VStack {
+                HStack {
+                    CTAButton(title: "Back") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing) {
+                        Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        
+                        if let duration = videoData.mediaInfo?.durationMins {
+                            Text("\(duration) min")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .padding(.horizontal, 25)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(8)
+                }
+                Spacer()
+            }
+            .padding(50)
+        }
+        .onAppear {
+            loadVideoURL()
+        }
+    }
+    
+    private func setupPlayer(with url: URL) {
+        let playerItem = AVPlayerItem(url: url)
+        player = AVPlayer(playerItem: playerItem)
+        
+        // Setup buffering observation using NotificationCenter
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: playerItem,
+            queue: .main
+        ) { _ in
+            isBuffering = true
+        }
+        
+        // Monitor when buffering ends
+        playerTimeObserver = player?.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
+            queue: .main
+        ) { [weak playerItem] _ in
+            guard let item = playerItem else { return }
+            
+            // Check if player is ready and likely to keep up
+            if item.status == .readyToPlay && item.isPlaybackLikelyToKeepUp {
+                isBuffering = false
+            } else if item.status == .readyToPlay && !item.isPlaybackLikelyToKeepUp {
+                isBuffering = true
+            }
+        }
+        
+        player?.play()
+    }
+    
+    private func cleanupPlayer() {
+        player?.pause()
+        
+        // Remove observers
+        NotificationCenter.default.removeObserver(self)
+        
+        if let timeObserver = playerTimeObserver {
+            player?.removeTimeObserver(timeObserver)
+            playerTimeObserver = nil
+        }
+        
+        player = nil
+    }
+    
+    private func loadVideoURL() {
+        guard let embedURL = videoData.playback?.embed_url else {
+            isLoadingVideo = false
+            return
+        }
+        
+        print("Loading video URL for: \(videoData.fileName)")
+        print("Embed URL: \(embedURL)")
+        
+        // Extract video URL from embed page
+        extractVideoURLFromEmbed(embedURL)
+    }
+    
+    private func extractVideoURLFromEmbed(_ embedURL: String) {
+        guard let url = URL(string: embedURL) else {
+            isLoadingVideo = false
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            guard let data = data,
+                  let htmlString = String(data: data, encoding: .utf8) else {
+                DispatchQueue.main.async {
+                    self.isLoadingVideo = false
+                }
+                return
+            }
+            
+            print("Fetched embed page, searching for video URL...")
+            
+            // Look for video URLs in the HTML content
+            let patterns = [
+                // Look for HLS streams (.m3u8) - preferred for iOS
+                #"https://cstr-vod\.castr\.com/videos/[^/]+/[^/]+\.mp4/index\.m3u8"#,
+                #"https://[^"'\s]*\.m3u8[^"'\s]*"#,
+                // Look for direct MP4 files
+                #"https://cstr-vod\.castr\.com/videos/[^/]+/[^"'\s]*\.mp4"#,
+                #"https://player\.castr\.io/[^"'\s]*\.mp4"#,
+                // Generic patterns with capture groups
+                #"src\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#,
+                #"file\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#,
+                #"url\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#,
+                #"source\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#
+            ]
+            
+            for (index, pattern) in patterns.enumerated() {
+                let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+                let range = NSRange(location: 0, length: htmlString.count)
+                
+                if let match = regex?.firstMatch(in: htmlString, options: [], range: range) {
+                    var extractedURL: String
+                    
+                    if match.numberOfRanges > 1 {
+                        // Extract from capture group
+                        let urlRange = Range(match.range(at: 1), in: htmlString)!
+                        extractedURL = String(htmlString[urlRange])
+                    } else {
+                        // Extract full match
+                        let urlRange = Range(match.range, in: htmlString)!
+                        extractedURL = String(htmlString[urlRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                    }
+                    
+                    print("Found potential video URL with pattern \(index): \(extractedURL)")
+                    
+                    // Test if this URL works
+                    self.testVideoURL(extractedURL) { works in
+                        DispatchQueue.main.async {
+                            if works {
+                                self.mp4URL = extractedURL
+                                print("Video URL works: \(extractedURL)")
+                            }
+                            self.isLoadingVideo = false
+                        }
+                    }
+                    return
+                }
+            }
+            
+            // If no video URL found, try to construct one from the video ID
+            if embedURL.contains("player.castr.com/vod/") {
+                let components = embedURL.components(separatedBy: "/")
+                if let videoId = components.last {
+                    // Try different URL constructions based on the pattern you provided
+                    let possibleURLs = [
+                        "https://cstr-vod.castr.com/videos/\(videoId)/index.m3u8",
+                        "https://player.castr.io/\(videoId).mp4"
+                    ]
+                    
+                    for testURL in possibleURLs {
+                        print("Trying constructed URL: \(testURL)")
+                        self.testVideoURL(testURL) { works in
+                            DispatchQueue.main.async {
+                                if works {
+                                    self.mp4URL = testURL
+                                    print("Constructed video URL works: \(testURL)")
+                                    self.isLoadingVideo = false
+                                    return
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            print("No working video URL found")
+            DispatchQueue.main.async {
+                self.isLoadingVideo = false
+            }
+        }.resume()
+    }
+    
+    private func testVideoURL(_ urlString: String, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: urlString) else {
+            completion(false)
+            return
+        }
+        
+        print("Testing video URL: \(urlString)")
+        
+        // For HLS streams, test differently than MP4 files
+        if urlString.contains(".m3u8") {
+            // For HLS, just check if we can create an AVPlayerItem
+            let playerItem = AVPlayerItem(url: url)
+            
+            // Test if the item loads successfully
+            let testPlayer = AVPlayer(playerItem: playerItem)
+            
+            // Use a simple timeout-based test
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+                let status = playerItem.status
+                let isPlayable = status == .readyToPlay || status == .unknown
+                print("HLS URL test result for \(urlString): \(isPlayable ? "SUCCESS" : "FAILED") (status: \(status.rawValue))")
+                completion(isPlayable)
+            }
+        } else {
+            // For MP4 files, test HTTP HEAD request
+            var request = URLRequest(url: url)
+            request.httpMethod = "HEAD"
+            request.timeoutInterval = 5
+            
+            URLSession.shared.dataTask(with: request) { _, response, error in
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("MP4 URL test failed for \(urlString): No HTTP response")
+                    completion(false)
+                    return
+                }
+                
+                let isValid = httpResponse.statusCode == 200
+                print("MP4 URL test result for \(urlString): \(isValid ? "SUCCESS" : "FAILED") (status: \(httpResponse.statusCode))")
+                completion(isValid)
+            }.resume()
+        }
+    }
+}
+
+struct LiveTVPlayerView: View {
+    let stream: LiveStream
+    @State private var player: AVPlayer?
+    @State private var isBuffering = false
+    @State private var playerTimeObserver: Any?
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            if let hlsURL = stream.hls_url ?? stream.playback?.hls_url,
+               let url = URL(string: hlsURL) {
+                VideoPlayer(player: player)
+                    .onAppear {
+                        setupPlayer(with: url)
+                    }
+                    .onDisappear {
+                        cleanupPlayer()
+                    }
+                    .overlay(
+                        // Show buffering only when actually buffering
+                        Group {
+                            if isBuffering {
+                                VStack {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(1.5)
+                                    
+                                    Text("Buffering...")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .padding(.top, 10)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(Color.black.opacity(0.7))
+                            }
+                        }
+                    )
+            } else if let embedURL = stream.embed_url ?? stream.playback?.embed_url,
+                      let url = URL(string: embedURL) {
+                // Show embedded player interface
+                VStack(spacing: 40) {
+                    Image(systemName: "tv.circle")
+                        .font(.system(size: 120))
+                        .foregroundColor(.red)
+                    
+                    Text(stream.name)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("Live Stream")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.gray)
+                    
+                    if let status = stream.broadcasting_status {
+                        HStack(spacing: 15) {
+                            Circle()
+                                .fill(status == "online" ? Color.green : Color.red)
+                                .frame(width: 16, height: 16)
+                            
+                            Text(status.capitalized)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    
+                    CTAButton(title: "Open Stream") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            } else {
+                // Enhanced fallback view
+                VStack(spacing: 40) {
+                    Image(systemName: "tv.circle")
+                        .font(.system(size: 120))
+                        .foregroundColor(.red)
+                    
+                    Text(stream.name)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("Live Stream")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.gray)
+                    
+                    if let status = stream.broadcasting_status {
+                        HStack(spacing: 15) {
+                            Circle()
+                                .fill(status == "online" ? Color.green : Color.red)
+                                .frame(width: 16, height: 16)
+                            
+                            Text(status.capitalized)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    
+                    // Mock streaming content rectangle
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.blue.opacity(0.3),
+                                    Color.purple.opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 900, height: 506)
+                        .overlay(
+                            VStack(spacing: 20) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 80))
+                                    .foregroundColor(.white)
+                                Text("Streaming Content")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundColor(.white)
+                                Text(stream.name)
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        )
+                        .cornerRadius(16)
+                }
+            }
+            
+            // Enhanced controls overlay
+            VStack {
+                HStack {
+                    CTAButton(title: "Back") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing) {
+                        Text(stream.name)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        if let status = stream.broadcasting_status {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(status == "online" ? Color.green : Color.red)
+                                    .frame(width: 8, height: 8)
+                                
+                                Text(status.uppercased())
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 25)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(8)
+                }
+                
+                Spacer()
+            }
+            .padding(50)
+        }
+    }
+    
+    private func setupPlayer(with url: URL) {
+        let playerItem = AVPlayerItem(url: url)
+        player = AVPlayer(playerItem: playerItem)
+        
+        // Setup buffering observation using NotificationCenter
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: playerItem,
+            queue: .main
+        ) { _ in
+            isBuffering = true
+        }
+        
+        // Monitor when buffering ends
+        playerTimeObserver = player?.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
+            queue: .main
+        ) { [weak playerItem] _ in
+            guard let item = playerItem else { return }
+            
+            // Check if player is ready and likely to keep up
+            if item.status == .readyToPlay && item.isPlaybackLikelyToKeepUp {
+                isBuffering = false
+            } else if item.status == .readyToPlay && !item.isPlaybackLikelyToKeepUp {
+                isBuffering = true
+            }
+        }
+        
+        player?.play()
+    }
+    
+    private func cleanupPlayer() {
+        player?.pause()
+        
+        // Remove observers
+        NotificationCenter.default.removeObserver(self)
+        
+        if let timeObserver = playerTimeObserver {
+            player?.removeTimeObserver(timeObserver)
+            playerTimeObserver = nil
+        }
+        
+        player = nil
+    }
+}
+                import SwiftUI
 import Foundation
 import AVKit
 
@@ -127,6 +792,25 @@ struct VideosResponse: Codable {
     let docs: [Video]
 }
 
+// MARK: - Thumbnail Loading State
+enum ThumbnailState: Equatable {
+    case loading
+    case loaded(UIImage)
+    case failed
+    
+    static func == (lhs: ThumbnailState, rhs: ThumbnailState) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading), (.failed, .failed):
+            return true
+        case (.loaded(let lhsImage), (.loaded(let rhsImage))):
+            // Compare images by their data representation
+            return lhsImage.pngData() == rhsImage.pngData()
+        default:
+            return false
+        }
+    }
+}
+
 // MARK: - API Service
 class CastrAPIService: ObservableObject {
     private let baseURL = "https://api.castr.com/v2"
@@ -140,7 +824,7 @@ class CastrAPIService: ObservableObject {
     @Published var recordings: [Recording] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var videoThumbnails: [String: UIImage] = [:]
+    @Published var thumbnailStates: [String: ThumbnailState] = [:]
     
     private var authHeader: String {
         let credentials = "\(accessToken):\(secretKey)"
@@ -281,8 +965,8 @@ class CastrAPIService: ObservableObject {
                     
                     print("Successfully loaded \(allVideoData.count) videos")
                     
-                    // Generate thumbnails for videos
-                    self?.generateThumbnails(for: allVideoData)
+                    // Initialize thumbnail states and start loading thumbnails
+                    self?.initializeThumbnailStates(for: allVideoData)
                 } catch {
                     print("Videos Decoding error: \(error)")
                     self?.handleError("Failed to decode videos: \(error.localizedDescription)")
@@ -417,6 +1101,49 @@ class CastrAPIService: ObservableObject {
         print("Error: \(message)")
     }
     
+    // Initialize thumbnail states
+    private func initializeThumbnailStates(for videoDataArray: [VideoData]) {
+        for videoData in videoDataArray {
+            thumbnailStates[videoData._id] = .loading
+        }
+        
+        // Start loading thumbnails for the first batch
+        for videoData in videoDataArray.prefix(10) {
+            loadThumbnail(for: videoData)
+        }
+    }
+    
+    // Load thumbnail on demand
+    func loadThumbnail(for videoData: VideoData) {
+        guard thumbnailStates[videoData._id] == .loading else { return }
+        
+        guard let embedURL = videoData.playback?.embed_url else {
+            DispatchQueue.main.async {
+                self.thumbnailStates[videoData._id] = .failed
+            }
+            return
+        }
+        
+        extractMP4URL(from: embedURL) { [weak self] extractedURL in
+            guard let extractedURL = extractedURL else {
+                print("Failed to extract video URL for \(videoData.fileName)")
+                DispatchQueue.main.async {
+                    self?.thumbnailStates[videoData._id] = .failed
+                }
+                return
+            }
+            
+            print("Attempting to generate thumbnail from: \(extractedURL)")
+            
+            // For HLS streams, try to get a frame, for MP4s use direct approach
+            if extractedURL.contains(".m3u8") {
+                self?.generateThumbnailFromHLS(extractedURL, for: videoData)
+            } else {
+                self?.generateThumbnailFromMP4(extractedURL, for: videoData)
+            }
+        }
+    }
+    
     // Extract MP4 URL from embed URL with improved parsing
     func extractMP4URL(from embedURL: String, completion: @escaping (String?) -> Void) {
         guard let url = URL(string: embedURL) else {
@@ -498,35 +1225,11 @@ class CastrAPIService: ObservableObject {
         }.resume()
     }
     
-    // Generate thumbnail with better error handling and proper URL extraction
-    func generateThumbnail(for videoData: VideoData) {
-        guard let embedURL = videoData.playback?.embed_url else { return }
-        
-        extractMP4URL(from: embedURL) { [weak self] extractedURL in
-            guard let extractedURL = extractedURL else {
-                print("Failed to extract video URL for \(videoData.fileName)")
-                DispatchQueue.main.async {
-                    self?.createPlaceholderThumbnail(for: videoData)
-                }
-                return
-            }
-            
-            print("Attempting to generate thumbnail from: \(extractedURL)")
-            
-            // For HLS streams, try to get a frame, for MP4s use direct approach
-            if extractedURL.contains(".m3u8") {
-                self?.generateThumbnailFromHLS(extractedURL, for: videoData)
-            } else {
-                self?.generateThumbnailFromMP4(extractedURL, for: videoData)
-            }
-        }
-    }
-    
     // Generate thumbnail from HLS stream
     private func generateThumbnailFromHLS(_ hlsURL: String, for videoData: VideoData) {
         guard let url = URL(string: hlsURL) else {
             DispatchQueue.main.async {
-                self.createPlaceholderThumbnail(for: videoData)
+                self.thumbnailStates[videoData._id] = .failed
             }
             return
         }
@@ -536,7 +1239,7 @@ class CastrAPIService: ObservableObject {
         imageGenerator.appliesPreferredTrackTransform = true
         imageGenerator.maximumSize = CGSize(width: 300, height: 170)
         
-        let time = CMTime(seconds: 10.0, preferredTimescale: 600) // Try 10 seconds in
+        let time = CMTime(seconds: 10.0, preferredTimescale: 600)
         
         DispatchQueue.global(qos: .background).async {
             imageGenerator.generateCGImagesAsynchronously(forTimes: [NSValue(time: time)]) { [weak self] (requestedTime, cgImage, actualTime, result, error) in
@@ -544,13 +1247,13 @@ class CastrAPIService: ObservableObject {
                 if let cgImage = cgImage {
                     let thumbnail = UIImage(cgImage: cgImage)
                     DispatchQueue.main.async {
-                        self?.videoThumbnails[videoData._id] = thumbnail
+                        self?.thumbnailStates[videoData._id] = .loaded(thumbnail)
                         print("Successfully generated thumbnail from HLS for \(videoData.fileName)")
                     }
                 } else {
                     print("Failed to generate thumbnail from HLS for \(videoData.fileName): \(error?.localizedDescription ?? "Unknown error")")
                     DispatchQueue.main.async {
-                        self?.createPlaceholderThumbnail(for: videoData)
+                        self?.thumbnailStates[videoData._id] = .failed
                     }
                 }
             }
@@ -561,7 +1264,7 @@ class CastrAPIService: ObservableObject {
     private func generateThumbnailFromMP4(_ mp4URL: String, for videoData: VideoData) {
         guard let url = URL(string: mp4URL) else {
             DispatchQueue.main.async {
-                self.createPlaceholderThumbnail(for: videoData)
+                self.thumbnailStates[videoData._id] = .failed
             }
             return
         }
@@ -579,68 +1282,15 @@ class CastrAPIService: ObservableObject {
                 if let cgImage = cgImage {
                     let thumbnail = UIImage(cgImage: cgImage)
                     DispatchQueue.main.async {
-                        self?.videoThumbnails[videoData._id] = thumbnail
+                        self?.thumbnailStates[videoData._id] = .loaded(thumbnail)
                         print("Successfully generated thumbnail from MP4 for \(videoData.fileName)")
                     }
                 } else {
                     print("Failed to generate thumbnail from MP4 for \(videoData.fileName): \(error?.localizedDescription ?? "Unknown error")")
                     DispatchQueue.main.async {
-                        self?.createPlaceholderThumbnail(for: videoData)
+                        self?.thumbnailStates[videoData._id] = .failed
                     }
                 }
-            }
-        }
-    }
-    
-    // Create a placeholder thumbnail with video info
-    private func createPlaceholderThumbnail(for videoData: VideoData) {
-        let size = CGSize(width: 300, height: 170)
-        UIGraphicsBeginImageContextWithOptions(size, false, 0)
-        
-        // Create gradient background
-        let context = UIGraphicsGetCurrentContext()!
-        let colors = [UIColor.systemBlue.cgColor, UIColor.systemPurple.cgColor]
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: nil)!
-        context.drawLinearGradient(gradient, start: CGPoint.zero, end: CGPoint(x: size.width, y: size.height), options: [])
-        
-        // Add play icon
-        let playIcon = UIImage(systemName: "play.circle.fill")?.withTintColor(.white, renderingMode: .alwaysOriginal)
-        let iconSize: CGFloat = 40
-        let iconRect = CGRect(x: (size.width - iconSize) / 2, y: (size.height - iconSize) / 2, width: iconSize, height: iconSize)
-        playIcon?.draw(in: iconRect)
-        
-        // Add duration if available
-        if let duration = videoData.mediaInfo?.durationMins {
-            let durationText = "\(duration) min"
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 12, weight: .medium),
-                .foregroundColor: UIColor.white
-            ]
-            let textSize = durationText.size(withAttributes: attributes)
-            let textRect = CGRect(x: size.width - textSize.width - 8, y: size.height - textSize.height - 8, width: textSize.width, height: textSize.height)
-            durationText.draw(in: textRect, withAttributes: attributes)
-        }
-        
-        let placeholderImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        
-        if let placeholder = placeholderImage {
-            videoThumbnails[videoData._id] = placeholder
-        }
-    }
-    
-    // Generate thumbnails for multiple videos with better approach
-    private func generateThumbnails(for videoDataArray: [VideoData]) {
-        // Generate placeholder thumbnails immediately for better UX
-        for videoData in videoDataArray {
-            createPlaceholderThumbnail(for: videoData)
-        }
-        
-        // Then try to generate real thumbnails for first few videos
-        for videoData in videoDataArray.prefix(5) {
-            DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + Double.random(in: 0...2)) {
-                self.generateThumbnail(for: videoData)
             }
         }
     }
@@ -729,25 +1379,8 @@ struct NavigationBar: View {
                     Image("tvos_logo")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 200, height: 200)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("GREATERLOVE")
-                            .font(.custom("Poppins-Bold", size: 18))
-                            .foregroundColor(.white)
-                            .kerning(1.5)
-                        
-                        Rectangle()
-                            .fill(Color.white)
-                            .frame(height: 2)
-                            .frame(width: 140)
-                        
-                        Text("NETWORK")
-                            .font(.custom("Poppins-Medium", size: 10))
-                            .foregroundColor(.white)
-                            .kerning(3)
-                    }
                 }
             }
             .padding(.leading, 60)
@@ -779,24 +1412,25 @@ struct NavigationBar: View {
     }
 }
 
-// MARK: - Navigation Bar Button
+// MARK: - Navigation Bar Button with proper tvOS focus handling
 struct NavigationBarButton: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Text(title)
                     .font(.custom("Poppins-SemiBold", size: 14))
-                    .foregroundColor(.white)
+                    .foregroundColor(isFocused ? .black : .white)
                     .kerning(0.5)
                 
                 // Dot indicator for selected state
                 if isSelected {
                     Circle()
-                        .fill(Color.white)
+                        .fill(isFocused ? Color.black : Color.white)
                         .frame(width: 4, height: 4)
                 }
             }
@@ -804,11 +1438,12 @@ struct NavigationBarButton: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? Color.white.opacity(0.3) : Color.clear, lineWidth: 1)
-                    .fill(isSelected ? Color.white.opacity(0.05) : Color.clear)
+                    .stroke(isSelected ? (isFocused ? Color.black : Color.white.opacity(0.3)) : Color.clear, lineWidth: 1)
+                    .fill(isFocused ? Color.white : (isSelected ? Color.white.opacity(0.05) : Color.clear))
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .focused($isFocused)
     }
 }
 
@@ -877,16 +1512,9 @@ struct HomeView: View {
                             .padding(.top, 30)
                         
                         // CTA Button
-                        Button("Continue Watching") {
+                        CTAButton(title: "Continue Watching") {
                             // Scroll to continue watching section
                         }
-                        .font(.custom("Poppins-SemiBold", size: 18))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 40)
-                        .padding(.vertical, 18)
-                        .background(Color(red: 0.9, green: 0.2, blue: 0.2))
-                        .cornerRadius(6)
-                        .buttonStyle(PlainButtonStyle())
                         .padding(.top, 50)
                     }
                     
@@ -1017,6 +1645,32 @@ struct HomeView: View {
     }
 }
 
+// MARK: - CTA Button Component
+struct CTAButton: View {
+    let title: String
+    let action: () -> Void
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.custom("Poppins-SemiBold", size: 18))
+                .foregroundColor(isFocused ? .white : .white)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isFocused ? Color(red: 1.0, green: 0.3, blue: 0.3) : Color(red: 0.9, green: 0.2, blue: 0.2))
+                        .shadow(color: isFocused ? .white.opacity(0.3) : .clear, radius: 8)
+                )
+                .scaleEffect(isFocused ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isFocused)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .focused($isFocused)
+    }
+}
+
 // MARK: - About View
 struct AboutView: View {
     var body: some View {
@@ -1061,16 +1715,9 @@ struct AboutView: View {
                             .foregroundColor(.gray)
                             .lineSpacing(6)
                         
-                        Button("CONTACT US") {
+                        CTAButton(title: "CONTACT US") {
                             // Action
                         }
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 30)
-                        .padding(.vertical, 15)
-                        .background(Color.red)
-                        .cornerRadius(8)
-                        .buttonStyle(PlainButtonStyle())
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
@@ -1118,16 +1765,9 @@ struct AboutView: View {
                             .font(.system(size: 20, weight: .medium))
                             .foregroundColor(.white)
                         
-                        Button("DONATE NOW") {
+                        CTAButton(title: "DONATE NOW") {
                             // Action
                         }
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 40)
-                        .padding(.vertical, 15)
-                        .background(Color.white)
-                        .cornerRadius(8)
-                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(80)
@@ -1188,24 +1828,35 @@ struct CategoriesView: View {
     }
 }
 
-// MARK: - Card Components
+// MARK: - Card Components with improved focus handling
 struct VideoDataCard: View {
     let videoData: VideoData
     let action: () -> Void
     @EnvironmentObject var apiService: CastrAPIService
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 15) {
-                // Display thumbnail if available, otherwise show gradient placeholder
+                // Display thumbnail based on state
                 Group {
-                    if let thumbnail = apiService.videoThumbnails[videoData._id] {
-                        Image(uiImage: thumbnail)
+                    switch apiService.thumbnailStates[videoData._id] {
+                    case .loading:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 300, height: 170)
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.2)
+                            )
+                    case .loaded(let image):
+                        Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 300, height: 170)
                             .clipped()
-                    } else {
+                    case .failed, .none:
                         Rectangle()
                             .fill(
                                 LinearGradient(
@@ -1235,6 +1886,10 @@ struct VideoDataCard: View {
                 }
                 .cornerRadius(12)
                 .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isFocused ? Color.white : Color.clear, lineWidth: 3)
+                )
+                .overlay(
                     // Play button overlay
                     VStack {
                         Spacer()
@@ -1249,6 +1904,8 @@ struct VideoDataCard: View {
                         }
                     }
                 )
+                .scaleEffect(isFocused ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isFocused)
                 
                 Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
                     .font(.custom("Poppins-Medium", size: 16))
@@ -1259,10 +1916,11 @@ struct VideoDataCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .focused($isFocused)
         .onAppear {
-            // Generate thumbnail if not already available
-            if apiService.videoThumbnails[videoData._id] == nil {
-                apiService.generateThumbnail(for: videoData)
+            // Load thumbnail on demand when card appears
+            if apiService.thumbnailStates[videoData._id] == .loading || apiService.thumbnailStates[videoData._id] == nil {
+                apiService.loadThumbnail(for: videoData)
             }
         }
     }
@@ -1270,6 +1928,7 @@ struct VideoDataCard: View {
 
 struct CategoryCard: View {
     let category: Category
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: {}) {
@@ -1295,6 +1954,12 @@ struct CategoryCard: View {
                         }
                     )
                     .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isFocused ? Color.white : Color.clear, lineWidth: 3)
+                    )
+                    .scaleEffect(isFocused ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.1), value: isFocused)
                 
                 Text(category.name)
                     .font(.system(size: 14, weight: .medium))
@@ -1302,11 +1967,13 @@ struct CategoryCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .focused($isFocused)
     }
 }
 
 struct CategoryDetailCard: View {
     let category: Category
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: {}) {
@@ -1332,6 +1999,12 @@ struct CategoryDetailCard: View {
                         }
                     )
                     .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isFocused ? Color.white : Color.clear, lineWidth: 3)
+                    )
+                    .scaleEffect(isFocused ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.1), value: isFocused)
                 
                 Text(category.name)
                     .font(.system(size: 16, weight: .medium))
@@ -1339,6 +2012,7 @@ struct CategoryDetailCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .focused($isFocused)
     }
 }
 
@@ -1347,23 +2021,37 @@ struct ShowCircleCard: View {
     let color: Color
     let action: () -> Void
     @EnvironmentObject var apiService: CastrAPIService
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 20) {
                 // Circular show image with thumbnail or gradient
                 Group {
-                    if let thumbnail = apiService.videoThumbnails[videoData._id] {
-                        Image(uiImage: thumbnail)
+                    switch apiService.thumbnailStates[videoData._id] {
+                    case .loading:
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 140, height: 140)
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(isFocused ? Color.white : Color.white.opacity(0.3), lineWidth: 3)
+                            )
+                    case .loaded(let image):
+                        Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 140, height: 140)
                             .clipShape(Circle())
                             .overlay(
                                 Circle()
-                                    .stroke(Color.white, lineWidth: 3)
+                                    .stroke(isFocused ? Color.white : Color.white.opacity(0.3), lineWidth: 3)
                             )
-                    } else {
+                    case .failed, .none:
                         Circle()
                             .fill(
                                 LinearGradient(
@@ -1375,7 +2063,7 @@ struct ShowCircleCard: View {
                             .frame(width: 140, height: 140)
                             .overlay(
                                 Circle()
-                                    .stroke(Color.white, lineWidth: 3)
+                                    .stroke(isFocused ? Color.white : Color.white.opacity(0.3), lineWidth: 3)
                             )
                             .overlay(
                                 // Show initials from video name
@@ -1385,6 +2073,8 @@ struct ShowCircleCard: View {
                             )
                     }
                 }
+                .scaleEffect(isFocused ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isFocused)
                 
                 VStack(spacing: 8) {
                     Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
@@ -1406,10 +2096,11 @@ struct ShowCircleCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .focused($isFocused)
         .onAppear {
-            // Generate thumbnail if not already available
-            if apiService.videoThumbnails[videoData._id] == nil {
-                apiService.generateThumbnail(for: videoData)
+            // Load thumbnail on demand when card appears
+            if apiService.thumbnailStates[videoData._id] == .loading || apiService.thumbnailStates[videoData._id] == nil {
+                apiService.loadThumbnail(for: videoData)
             }
         }
     }
@@ -1420,6 +2111,7 @@ struct LiveStreamCard: View {
     let number: String
     let subtitle: String
     let action: () -> Void
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
@@ -1460,6 +2152,12 @@ struct LiveStreamCard: View {
                         }
                     )
                     .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isFocused ? Color.white : Color.clear, lineWidth: 3)
+                    )
+                    .scaleEffect(isFocused ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.1), value: isFocused)
                 
                 VStack(spacing: 5) {
                     Text(subtitle)
@@ -1474,598 +2172,6 @@ struct LiveStreamCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - Loading Components
-struct LoadingCard: View {
-    var body: some View {
-        VStack(spacing: 15) {
-            Rectangle()
-                .fill(Color.gray.opacity(0.4))
-                .frame(width: 300, height: 170)
-                .cornerRadius(12)
-                .overlay(
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                )
-            
-            Rectangle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 200, height: 20)
-                .cornerRadius(4)
-        }
-    }
-}
-
-struct LoadingCategoryCard: View {
-    var body: some View {
-        VStack(spacing: 15) {
-            Rectangle()
-                .fill(Color.gray.opacity(0.4))
-                .frame(width: 280, height: 158)
-                .cornerRadius(8)
-                .overlay(
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                )
-            
-            Rectangle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 120, height: 16)
-                .cornerRadius(4)
-        }
-    }
-}
-
-struct LoadingShowCard: View {
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Circle()
-                .fill(color.opacity(0.4))
-                .frame(width: 140, height: 140)
-                .overlay(
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                )
-            
-            VStack(spacing: 8) {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 120, height: 16)
-                    .cornerRadius(4)
-                
-                Rectangle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 80, height: 12)
-                    .cornerRadius(4)
-            }
-        }
-    }
-}
-
-struct LoadingLiveStreamCard: View {
-    let number: String
-    let subtitle: String
-    
-    var body: some View {
-        VStack(spacing: 25) {
-            Rectangle()
-                .fill(Color.gray.opacity(0.4))
-                .frame(width: 440, height: 248)
-                .overlay(
-                    VStack(spacing: 10) {
-                        Text("GREATER LOVE TV")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white.opacity(0.7))
-                        
-                        Text(number)
-                            .font(.system(size: 96, weight: .bold))
-                            .foregroundColor(.white.opacity(0.7))
-                        
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    }
-                )
-                .cornerRadius(12)
-            
-            Text(subtitle)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(.white.opacity(0.7))
-        }
-    }
-}
-
-// MARK: - Video Player Views
-struct VideoDataPlayerView: View {
-    let videoData: VideoData
-    @State private var player: AVPlayer?
-    @State private var mp4URL: String?
-    @State private var isLoadingVideo = true
-    @Environment(\.presentationMode) var presentationMode
-    
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            if isLoadingVideo {
-                VStack(spacing: 20) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(2)
-                    
-                    Text("Loading video...")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.white)
-                    
-                    Text(videoData.fileName)
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
-                }
-            } else if let mp4URL = mp4URL, let url = URL(string: mp4URL) {
-                // Play the video directly (supports both MP4 and HLS)
-                VideoPlayer(player: player)
-                    .onAppear {
-                        print("Starting video playback: \(mp4URL)")
-                        player = AVPlayer(url: url)
-                        player?.play()
-                    }
-                    .onDisappear {
-                        print("Stopping video playback")
-                        player?.pause()
-                        player = nil
-                    }
-                    .overlay(
-                        // Add loading overlay for video buffering
-                        Group {
-                            if player?.currentItem?.status == .unknown {
-                                VStack {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(1.5)
-                                    
-                                    Text("Buffering...")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white)
-                                        .padding(.top, 10)
-                                }
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(Color.black.opacity(0.7))
-                            }
-                        }
-                    )
-            } else if let embedURL = videoData.playback?.embed_url,
-                      let url = URL(string: embedURL) {
-                // Fallback to embed player
-                VStack(spacing: 40) {
-                    Image(systemName: "play.rectangle.fill")
-                        .font(.system(size: 120))
-                        .foregroundColor(.blue)
-                    
-                    Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
-                    
-                    if let duration = videoData.mediaInfo?.durationMins {
-                        Text("Duration: \(duration) minutes")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
-                    
-                    VStack(spacing: 20) {
-                        Text("Video Content")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundColor(.gray)
-                        
-                        Button("Open in Browser") {
-                            UIApplication.shared.open(url)
-                        }
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 30)
-                        .padding(.vertical, 15)
-                        .background(Color.blue)
-                        .cornerRadius(8)
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Button("Play Embedded") {
-                            UIApplication.shared.open(url)
-                        }
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 25)
-                        .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(6)
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-            } else {
-                VStack(spacing: 40) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 100))
-                        .foregroundColor(.orange)
-                    
-                    Text("Video not available")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.gray)
-                    
-                    Text(videoData.fileName)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
-                    
-                    Text("The video content is currently unavailable or the embed URL is missing.")
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 60)
-                }
-            }
-            
-            // Enhanced controls overlay
-            VStack {
-                HStack {
-                    Button("Back") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 25)
-                    .padding(.vertical, 12)
-                    .background(Color.black.opacity(0.7))
-                    .cornerRadius(8)
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing) {
-                        Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                        
-                        if let duration = videoData.mediaInfo?.durationMins {
-                            Text("\(duration) min")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .padding(.horizontal, 25)
-                    .padding(.vertical, 12)
-                    .background(Color.black.opacity(0.8))
-                    .cornerRadius(8)
-                }
-                Spacer()
-            }
-            .padding(50)
-        }
-        .onAppear {
-            loadVideoURL()
-        }
-    }
-    
-    private func loadVideoURL() {
-        guard let embedURL = videoData.playback?.embed_url else {
-            isLoadingVideo = false
-            return
-        }
-        
-        print("Loading video URL for: \(videoData.fileName)")
-        print("Embed URL: \(embedURL)")
-        
-        // Extract video URL from embed page
-        extractVideoURLFromEmbed(embedURL)
-    }
-    
-    private func extractVideoURLFromEmbed(_ embedURL: String) {
-        guard let url = URL(string: embedURL) else {
-            isLoadingVideo = false
-            return
-        }
-        
-        URLSession.shared.dataTask(with: url) { [self] data, response, error in
-            guard let data = data,
-                  let htmlString = String(data: data, encoding: .utf8) else {
-                DispatchQueue.main.async {
-                    self.isLoadingVideo = false
-                }
-                return
-            }
-            
-            print("Fetched embed page, searching for video URL...")
-            
-            // Look for video URLs in the HTML content
-            let patterns = [
-                // Look for HLS streams (.m3u8) - preferred for iOS
-                #"https://cstr-vod\.castr\.com/videos/[^/]+/[^/]+\.mp4/index\.m3u8"#,
-                #"https://[^"'\s]*\.m3u8[^"'\s]*"#,
-                // Look for direct MP4 files
-                #"https://cstr-vod\.castr\.com/videos/[^/]+/[^"'\s]*\.mp4"#,
-                #"https://player\.castr\.io/[^"'\s]*\.mp4"#,
-                // Generic patterns with capture groups
-                #"src\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#,
-                #"file\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#,
-                #"url\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#,
-                #"source\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#
-            ]
-            
-            for (index, pattern) in patterns.enumerated() {
-                let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-                let range = NSRange(location: 0, length: htmlString.count)
-                
-                if let match = regex?.firstMatch(in: htmlString, options: [], range: range) {
-                    var extractedURL: String
-                    
-                    if match.numberOfRanges > 1 {
-                        // Extract from capture group
-                        let urlRange = Range(match.range(at: 1), in: htmlString)!
-                        extractedURL = String(htmlString[urlRange])
-                    } else {
-                        // Extract full match
-                        let urlRange = Range(match.range, in: htmlString)!
-                        extractedURL = String(htmlString[urlRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-                    }
-                    
-                    print("Found potential video URL with pattern \(index): \(extractedURL)")
-                    
-                    // Test if this URL works
-                    self.testVideoURL(extractedURL) { works in
-                        DispatchQueue.main.async {
-                            if works {
-                                self.mp4URL = extractedURL
-                                print("Video URL works: \(extractedURL)")
-                            }
-                            self.isLoadingVideo = false
-                        }
-                    }
-                    return
-                }
-            }
-            
-            // If no video URL found, try to construct one from the video ID
-            if embedURL.contains("player.castr.com/vod/") {
-                let components = embedURL.components(separatedBy: "/")
-                if let videoId = components.last {
-                    // Try different URL constructions based on the pattern you provided
-                    let possibleURLs = [
-                        "https://cstr-vod.castr.com/videos/\(videoId)/index.m3u8",
-                        "https://player.castr.io/\(videoId).mp4"
-                    ]
-                    
-                    for testURL in possibleURLs {
-                        print("Trying constructed URL: \(testURL)")
-                        self.testVideoURL(testURL) { works in
-                            DispatchQueue.main.async {
-                                if works {
-                                    self.mp4URL = testURL
-                                    print("Constructed video URL works: \(testURL)")
-                                    self.isLoadingVideo = false
-                                    return
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            print("No working video URL found")
-            DispatchQueue.main.async {
-                self.isLoadingVideo = false
-            }
-        }.resume()
-    }
-    
-    private func testVideoURL(_ urlString: String, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: urlString) else {
-            completion(false)
-            return
-        }
-        
-        print("Testing video URL: \(urlString)")
-        
-        // For HLS streams, test differently than MP4 files
-        if urlString.contains(".m3u8") {
-            // For HLS, just check if we can create an AVPlayerItem
-            let playerItem = AVPlayerItem(url: url)
-            
-            // Test if the item loads successfully
-            let testPlayer = AVPlayer(playerItem: playerItem)
-            
-            // Use a simple timeout-based test
-            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-                let status = playerItem.status
-                let isPlayable = status == .readyToPlay || status == .unknown
-                print("HLS URL test result for \(urlString): \(isPlayable ? "SUCCESS" : "FAILED") (status: \(status.rawValue))")
-                completion(isPlayable)
-            }
-        } else {
-            // For MP4 files, test HTTP HEAD request
-            var request = URLRequest(url: url)
-            request.httpMethod = "HEAD"
-            request.timeoutInterval = 5
-            
-            URLSession.shared.dataTask(with: request) { _, response, error in
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    print("MP4 URL test failed for \(urlString): No HTTP response")
-                    completion(false)
-                    return
-                }
-                
-                let isValid = httpResponse.statusCode == 200
-                print("MP4 URL test result for \(urlString): \(isValid ? "SUCCESS" : "FAILED") (status: \(httpResponse.statusCode))")
-                completion(isValid)
-            }.resume()
-        }
-    }
-}
-                
-
-struct LiveTVPlayerView: View {
-    let stream: LiveStream
-    @State private var player: AVPlayer?
-    @Environment(\.presentationMode) var presentationMode
-    
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            if let hlsURL = stream.hls_url ?? stream.playback?.hls_url,
-               let url = URL(string: hlsURL) {
-                VideoPlayer(player: player)
-                    .onAppear {
-                        player = AVPlayer(url: url)
-                        player?.play()
-                    }
-                    .onDisappear {
-                        player?.pause()
-                        player = nil
-                    }
-            } else if let embedURL = stream.embed_url ?? stream.playback?.embed_url,
-                      let url = URL(string: embedURL) {
-                // Show embedded player interface
-                VStack(spacing: 40) {
-                    Image(systemName: "tv.circle")
-                        .font(.system(size: 120))
-                        .foregroundColor(.red)
-                    
-                    Text(stream.name)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text("Live Stream")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.gray)
-                    
-                    if let status = stream.broadcasting_status {
-                        HStack(spacing: 15) {
-                            Circle()
-                                .fill(status == "online" ? Color.green : Color.red)
-                                .frame(width: 16, height: 16)
-                            
-                            Text(status.capitalized)
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    
-                    Button("Open Stream") {
-                        UIApplication.shared.open(url)
-                    }
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 15)
-                    .background(Color.red)
-                    .cornerRadius(8)
-                    .buttonStyle(PlainButtonStyle())
-                }
-            } else {
-                // Enhanced fallback view
-                VStack(spacing: 40) {
-                    Image(systemName: "tv.circle")
-                        .font(.system(size: 120))
-                        .foregroundColor(.red)
-                    
-                    Text(stream.name)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text("Live Stream")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.gray)
-                    
-                    if let status = stream.broadcasting_status {
-                        HStack(spacing: 15) {
-                            Circle()
-                                .fill(status == "online" ? Color.green : Color.red)
-                                .frame(width: 16, height: 16)
-                            
-                            Text(status.capitalized)
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    
-                    // Mock streaming content rectangle
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.blue.opacity(0.3),
-                                    Color.purple.opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 900, height: 506)
-                        .overlay(
-                            VStack(spacing: 20) {
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 80))
-                                    .foregroundColor(.white)
-                                Text("Streaming Content")
-                                    .font(.system(size: 28, weight: .medium))
-                                    .foregroundColor(.white)
-                                Text(stream.name)
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                        )
-                        .cornerRadius(16)
-                }
-            }
-            
-            // Enhanced controls overlay
-            VStack {
-                HStack {
-                    Button("Back") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 25)
-                    .padding(.vertical, 12)
-                    .background(Color.black.opacity(0.8))
-                    .cornerRadius(8)
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing) {
-                        Text(stream.name)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(.white)
-                        
-                        if let status = stream.broadcasting_status {
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(status == "online" ? Color.green : Color.red)
-                                    .frame(width: 8, height: 8)
-                                
-                                Text(status.uppercased())
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 25)
-                    .padding(.vertical, 12)
-                    .background(Color.black.opacity(0.8))
-                    .cornerRadius(8)
-                }
-                
-                Spacer()
-            }
-            .padding(50)
-        }
+        .focused($isFocused)
     }
 }
