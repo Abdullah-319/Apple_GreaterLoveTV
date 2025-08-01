@@ -1,0 +1,538 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		18D60D462E3226CE00DC2EDB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 18D60D302E3226CC00DC2EDB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 18D60D372E3226CC00DC2EDB;
+			remoteInfo = GreaterLoveNetwork;
+		};
+		18D60D502E3226CE00DC2EDB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 18D60D302E3226CC00DC2EDB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 18D60D372E3226CC00DC2EDB;
+			remoteInfo = GreaterLoveNetwork;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		18D60D382E3226CC00DC2EDB /* GreaterLoveNetwork.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GreaterLoveNetwork.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		18D60D452E3226CE00DC2EDB /* GreaterLoveNetworkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GreaterLoveNetworkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		18D60D4F2E3226CE00DC2EDB /* GreaterLoveNetworkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GreaterLoveNetworkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		184E79352E32E81E008EC96E /* Notes */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Notes;
+			sourceTree = "<group>";
+		};
+		18D60D3A2E3226CC00DC2EDB /* GreaterLoveNetwork */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GreaterLoveNetwork;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		18D60D352E3226CC00DC2EDB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18D60D422E3226CE00DC2EDB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18D60D4C2E3226CE00DC2EDB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		18D60D2F2E3226CC00DC2EDB = {
+			isa = PBXGroup;
+			children = (
+				184E79352E32E81E008EC96E /* Notes */,
+				18D60D3A2E3226CC00DC2EDB /* GreaterLoveNetwork */,
+				18D60D392E3226CC00DC2EDB /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		18D60D392E3226CC00DC2EDB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				18D60D382E3226CC00DC2EDB /* GreaterLoveNetwork.app */,
+				18D60D452E3226CE00DC2EDB /* GreaterLoveNetworkTests.xctest */,
+				18D60D4F2E3226CE00DC2EDB /* GreaterLoveNetworkUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 18D60D592E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetwork" */;
+			buildPhases = (
+				18D60D342E3226CC00DC2EDB /* Sources */,
+				18D60D352E3226CC00DC2EDB /* Frameworks */,
+				18D60D362E3226CC00DC2EDB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				184E79352E32E81E008EC96E /* Notes */,
+				18D60D3A2E3226CC00DC2EDB /* GreaterLoveNetwork */,
+			);
+			name = GreaterLoveNetwork;
+			packageProductDependencies = (
+			);
+			productName = GreaterLoveNetwork;
+			productReference = 18D60D382E3226CC00DC2EDB /* GreaterLoveNetwork.app */;
+			productType = "com.apple.product-type.application";
+		};
+		18D60D442E3226CE00DC2EDB /* GreaterLoveNetworkTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 18D60D5C2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkTests" */;
+			buildPhases = (
+				18D60D412E3226CE00DC2EDB /* Sources */,
+				18D60D422E3226CE00DC2EDB /* Frameworks */,
+				18D60D432E3226CE00DC2EDB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				18D60D472E3226CE00DC2EDB /* PBXTargetDependency */,
+			);
+			name = GreaterLoveNetworkTests;
+			packageProductDependencies = (
+			);
+			productName = GreaterLoveNetworkTests;
+			productReference = 18D60D452E3226CE00DC2EDB /* GreaterLoveNetworkTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		18D60D4E2E3226CE00DC2EDB /* GreaterLoveNetworkUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 18D60D5F2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkUITests" */;
+			buildPhases = (
+				18D60D4B2E3226CE00DC2EDB /* Sources */,
+				18D60D4C2E3226CE00DC2EDB /* Frameworks */,
+				18D60D4D2E3226CE00DC2EDB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				18D60D512E3226CE00DC2EDB /* PBXTargetDependency */,
+			);
+			name = GreaterLoveNetworkUITests;
+			packageProductDependencies = (
+			);
+			productName = GreaterLoveNetworkUITests;
+			productReference = 18D60D4F2E3226CE00DC2EDB /* GreaterLoveNetworkUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		18D60D302E3226CC00DC2EDB /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					18D60D372E3226CC00DC2EDB = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					18D60D442E3226CE00DC2EDB = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 18D60D372E3226CC00DC2EDB;
+					};
+					18D60D4E2E3226CE00DC2EDB = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 18D60D372E3226CC00DC2EDB;
+					};
+				};
+			};
+			buildConfigurationList = 18D60D332E3226CC00DC2EDB /* Build configuration list for PBXProject "GreaterLoveNetwork" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 18D60D2F2E3226CC00DC2EDB;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 18D60D392E3226CC00DC2EDB /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */,
+				18D60D442E3226CE00DC2EDB /* GreaterLoveNetworkTests */,
+				18D60D4E2E3226CE00DC2EDB /* GreaterLoveNetworkUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		18D60D362E3226CC00DC2EDB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18D60D432E3226CE00DC2EDB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18D60D4D2E3226CE00DC2EDB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		18D60D342E3226CC00DC2EDB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18D60D412E3226CE00DC2EDB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18D60D4B2E3226CE00DC2EDB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		18D60D472E3226CE00DC2EDB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */;
+			targetProxy = 18D60D462E3226CE00DC2EDB /* PBXContainerItemProxy */;
+		};
+		18D60D512E3226CE00DC2EDB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */;
+			targetProxy = 18D60D502E3226CE00DC2EDB /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		18D60D572E3226CE00DC2EDB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TVOS_DEPLOYMENT_TARGET = 18.5;
+			};
+			name = Debug;
+		};
+		18D60D582E3226CE00DC2EDB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				TVOS_DEPLOYMENT_TARGET = 18.5;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		18D60D5A2E3226CE00DC2EDB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetwork;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		18D60D5B2E3226CE00DC2EDB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetwork;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
+		18D60D5D2E3226CE00DC2EDB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetworkTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GreaterLoveNetwork.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GreaterLoveNetwork";
+				TVOS_DEPLOYMENT_TARGET = 18.5;
+			};
+			name = Debug;
+		};
+		18D60D5E2E3226CE00DC2EDB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetworkTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GreaterLoveNetwork.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GreaterLoveNetwork";
+				TVOS_DEPLOYMENT_TARGET = 18.5;
+			};
+			name = Release;
+		};
+		18D60D602E3226CE00DC2EDB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetworkUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_TARGET_NAME = GreaterLoveNetwork;
+			};
+			name = Debug;
+		};
+		18D60D612E3226CE00DC2EDB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetworkUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_TARGET_NAME = GreaterLoveNetwork;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		18D60D332E3226CC00DC2EDB /* Build configuration list for PBXProject "GreaterLoveNetwork" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				18D60D572E3226CE00DC2EDB /* Debug */,
+				18D60D582E3226CE00DC2EDB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		18D60D592E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetwork" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				18D60D5A2E3226CE00DC2EDB /* Debug */,
+				18D60D5B2E3226CE00DC2EDB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		18D60D5C2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				18D60D5D2E3226CE00DC2EDB /* Debug */,
+				18D60D5E2E3226CE00DC2EDB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		18D60D5F2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				18D60D602E3226CE00DC2EDB /* Debug */,
+				18D60D612E3226CE00DC2EDB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 18D60D302E3226CC00DC2EDB /* Project object */;
+}

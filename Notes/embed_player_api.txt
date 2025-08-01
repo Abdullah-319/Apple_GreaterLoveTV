@@ -1,0 +1,109 @@
+Embed Player API
+Castr Embed Player: URL Parameter Control API
+
+Table of Contents
+
+Introduction
+Parameter List
+Examples
+Introduction
+
+Welcome to the URL Parameter Control API documentation for the Castr Embed Player. This guide explains how you can control various aspects of the player by simply passing URL parameters.
+
+To utilize these controls, append the parameters as query strings to the video URL, like so:
+
+https://player.castr.com/videoid?autoplay=on
+
+Parameter List
+
+The following parameters can be used to manipulate the player's behavior:
+
+autoplay: on | off
+
+Controls whether the player should automatically start playing upon load.
+
+muted: on | off
+
+Enables or disables muted playback.
+
+controls: on | off
+
+Determines the visibility of player controls.
+
+hideControlbarPlayButton: true
+
+Hides the player’s Play and Pause buttons and disables pausing when the viewer clicks on the video.
+
+loop: on | off
+
+Enables looping for video-on-demand content.
+
+pp: true | false
+
+The player will start only when focused if this flag is set to true.
+
+pip: on | off
+
+Determines the visibility of PiP option.
+
+cast: on | off
+
+Control Google Cast detection
+
+airplay: on | off
+
+Set whether or not in-player AirPlay support should be activated on eligible devices.
+
+fullscreen: on | off
+
+Determines the visibility of fullsceen option.
+
+click: on | off
+
+Disables click-to-pause functionality and keyboard controls when set to 'off'.
+
+h265: true | false
+
+Enables H265 playback capability in the player.
+
+speed: true | false
+
+Enables playback speed control capability in the player.
+
+tracks: [labels]
+
+Customizes the labels of audio tracks by listing them in a comma-separated format. This parameter allows you to assign specific names to each audio track in the order they appear. For example, to label two audio tracks as English and French, you would use tracks=english,french.
+
+defaultTrack: [x]
+
+Specifies which audio track should play by default when the stream starts. The track number corresponds to the order of tracks provided in the tracks parameter, with 0 referring to the first track, 1 to the second, and so on.
+
+ccTracks: [x]
+
+Customizes the labels of caption tracks by listing them in a comma-separated format. This parameter allows you to assign specific names to each caption track in the order they appear. For example, to label two subtitle tracks as English and French, you would use ccTracks=english,french.
+
+buttons: true | false
+
+When set to true, this option enables clickable buttons beneath the player interface. These buttons will be labeled based on the tracks parameter, allowing users to switch between audio tracks with ease.
+
+seekTo: [x]
+
+Using this, the player will seek to the time indicated by the parameter 'x', measured in seconds. This is only applicable for Video-on-Demand contents.
+
+quality: highest
+
+Using this, the player will play the content in the highest resolution always. This is only applicable for Video-on-Demand contents.
+
+?iframeMsg: true | false
+
+When set to true, this parameter enables iframe messaging. To retrieve messages from the iframe, you need to use the postMessage method. These messages will provide the current watch time of the content being viewed by the user.
+
+Examples
+
+Here are a few examples to demonstrate how to use the URL parameters:
+
+Autoplay enabled and muted
+https://player.castr.com/videoid?autoplay=on&muted=on
+
+Loop video-on-demand content
+https://player.castr.com/videoid?loop=on

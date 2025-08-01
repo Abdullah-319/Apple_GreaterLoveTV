@@ -1,0 +1,89 @@
+Get Stream Stats
+How to get stream online status, duration, bitrate, codec and more
+Overview
+
+The stream statistic can help you monitor if there's any anomaly during the streaming session and troubleshoot the problems that occurred. LiveAPI provides the GET /v2/live_streams/{id}/stats endpoint to help you easily grab the stream's stats in real-time.
+
+How to get stream stats
+
+You can call the GET /v2/live_streams/{id}/stats endpoint to get the stats of your stream in real-time.
+
+Sample request:
+
+cURL
+
+curl --location --request GET 'https://api.castr.com/v2/live_streams/620e0d57427ff4ddd764515f/stats' \
+--header 'Content-Type: application/json;charset=UTF-8' \
+--header 'Authorization: {your_authentication}'
+Sample response:
+For further info, you can refer to GET /v2/live_streams/{id}/stats.
+
+JSON
+
+{
+  "status": "running",
+  "bitrate": 1333,
+  "last_dts": 1749711852486,
+  "push_stats": {},
+  "alive": true,
+  "srt_port_resolve": false,
+  "retry_count": 0,
+  "opened_at": 1749711734724,
+  "media_info": {
+    "flow_type": "stream",
+    "stream_id": 0,
+    "tracks": [
+      {
+        "profile": "High",
+        "level": "4",
+        "width": 1920,
+        "codec": "h264",
+        "track_id": "v1",
+        "content": "video",
+        "bitrate": 1202,
+        "height": 1080,
+        "closed_captions": {},
+        "bframes": 3,
+        "fps": 30,
+        "avg_gop": 47,
+        "is_progressive": true,
+        "last_gop": 60,
+        "length_size": 4,
+        "num_refs_frames": 4,
+        "pix_fmt": "yuv420p",
+        "pixel_height": 1080,
+        "pixel_width": 1920,
+        "sar_height": 1,
+        "sar_width": 1,
+        "avg_fps": 30
+      },
+      {
+        "codec": "aac",
+        "track_id": "a1",
+        "content": "audio",
+        "bitrate": 131,
+        "channels": 2,
+        "avg_fps": 43.07,
+        "sample_rate": 44100,
+        "closed_captions": {}
+      }
+    ]
+  },
+  "pull_urls": {
+    "rtmp": "rtmp://sg-1.castr.com/static/live_xx”,
+    "srt": "srt://sg-1.castr.com:9998/?streamid=#!::r=xx,m=request"
+  }
+}
+🚧
+No stats returned when stream offline
+
+You should only call the endpoint when your stream's status is online, otherwise, it'll return an error.
+Sample response when getting the stats of an offline stream:
+
+JSON
+
+{
+    "statusCode": 404,
+    "error": "Not Found",
+    "message": "Stream not found in upstreams."
+}

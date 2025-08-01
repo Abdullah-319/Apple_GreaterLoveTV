@@ -1,2 +1,0 @@
-# GreaterLoveNetwork
-TvOS App
