@@ -50,7 +50,7 @@ struct QRCodesView: View {
                         
                         QRCodeCard(
                             title: "Prayer Request",
-                            imageName: "prayer_requesr_qrcode"
+                            imageName: "prayer_request_qrcode"
                         )
                         
                         QRCodeCard(
