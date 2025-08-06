@@ -1,8 +1,9 @@
 import SwiftUI
 
-// MARK: - Home View
+// MARK: - Home View with Continue Watching
 struct HomeView: View {
     @EnvironmentObject var apiService: CastrAPIService
+    @StateObject private var progressManager = WatchProgressManager.shared
     @State private var selectedContent: Any?
     @State private var showingVideoPlayer = false
     
@@ -11,7 +12,12 @@ struct HomeView: View {
             headerSection()
             
             VStack(spacing: 80) {
-                continueWatchingSection
+                // Show continue watching section only if there are videos in progress
+                if !progressManager.getContinueWatchingVideos().isEmpty {
+                    continueWatchingSection
+                }
+                
+                recentVideosSection
                 categoriesSection
                 showsSection
                 liveStreamsSection
@@ -26,6 +32,10 @@ struct HomeView: View {
             } else if let videoData = selectedContent as? VideoData {
                 VideoDataPlayerView(videoData: videoData)
             }
+        }
+        .onAppear {
+            // Refresh progress manager when view appears
+            progressManager.objectWillChange.send()
         }
     }
     
@@ -59,10 +69,14 @@ struct HomeView: View {
                             .foregroundColor(.white)
                             .padding(.top, 30)
                         
-                        CTAButton(title: "Continue Watching") {
-                            // Scroll to continue watching section
+                        CTAButton(title: progressManager.getContinueWatchingVideos().isEmpty ? "Start Watching" : "Continue Watching") {
+                            // Scroll to continue watching section or start browsing
                             withAnimation(.easeInOut(duration: 0.5)) {
-                                // Add scroll functionality here if needed
+                                if let firstVideo = progressManager.getContinueWatchingVideos().first,
+                                   let videoData = findVideoData(by: firstVideo.videoId) {
+                                    selectedContent = videoData
+                                    showingVideoPlayer = true
+                                }
                             }
                         }
                         .padding(.top, 50)
@@ -83,6 +97,42 @@ struct HomeView: View {
                 Text("Continue Watching")
                     .font(.custom("Poppins-Medium", size: 24))
                     .foregroundColor(.white)
+                
+                Spacer()
+                
+                Button("Clear All") {
+                    progressManager.clearAllProgress()
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.gray)
+            }
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 30) {
+                    ForEach(progressManager.getContinueWatchingVideos()) { progress in
+                        if let videoData = findVideoData(by: progress.videoId) {
+                            ContinueWatchingCard(
+                                videoData: videoData,
+                                watchProgress: progress
+                            ) {
+                                selectedContent = videoData
+                                showingVideoPlayer = true
+                            }
+                            .environmentObject(apiService)
+                        }
+                    }
+                }
+                .padding(.horizontal, 40)
+            }
+        }
+    }
+    
+    private var recentVideosSection: some View {
+        VStack(alignment: .leading, spacing: 40) {
+            HStack {
+                Text(progressManager.getContinueWatchingVideos().isEmpty ? "Recent Videos" : "More Videos")
+                    .font(.custom("Poppins-Medium", size: 24))
+                    .foregroundColor(.white)
                 Spacer()
             }
             
@@ -93,7 +143,11 @@ struct HomeView: View {
                             LoadingCard()
                         }
                     } else {
-                        ForEach(Array(apiService.videoData.prefix(10))) { videoData in
+                        // Filter out videos that are already in continue watching
+                        let continueWatchingIds = Set(progressManager.getContinueWatchingVideos().map { $0.videoId })
+                        let filteredVideos = apiService.videoData.filter { !continueWatchingIds.contains($0._id) }
+                        
+                        ForEach(Array(filteredVideos.prefix(10))) { videoData in
                             VideoDataCard(videoData: videoData) {
                                 selectedContent = videoData
                                 showingVideoPlayer = true
@@ -188,5 +242,11 @@ struct HomeView: View {
             }
             .padding(.horizontal, 40)
         }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func findVideoData(by videoId: String) -> VideoData? {
+        return apiService.videoData.first { $0._id == videoId }
     }
 }

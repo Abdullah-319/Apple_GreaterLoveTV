@@ -6,6 +6,10 @@ struct GreaterLoveNetworkApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(.dark)
+                .onAppear {
+                    // Initialize the progress manager on app launch
+                    _ = WatchProgressManager.shared
+                }
         }
     }
 }

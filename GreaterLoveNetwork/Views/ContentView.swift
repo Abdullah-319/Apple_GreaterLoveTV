@@ -1,8 +1,9 @@
 import SwiftUI
 
-// MARK: - Content View
+// MARK: - Content View with Progress Manager
 struct ContentView: View {
     @StateObject private var apiService = CastrAPIService()
+    @StateObject private var progressManager = WatchProgressManager.shared
     @State private var selectedNavItem = "HOME"
     
     var body: some View {
@@ -33,14 +34,17 @@ struct ContentView: View {
                             case "HOME":
                                 HomeView()
                                     .environmentObject(apiService)
+                                    .environmentObject(progressManager)
                             case "ABOUT US":
                                 AboutView()
                             case "ALL CATEGORIES":
                                 CategoriesView()
                                     .environmentObject(apiService)
+                                    .environmentObject(progressManager)
                             default:
                                 HomeView()
                                     .environmentObject(apiService)
+                                    .environmentObject(progressManager)
                             }
                         }
                     }
