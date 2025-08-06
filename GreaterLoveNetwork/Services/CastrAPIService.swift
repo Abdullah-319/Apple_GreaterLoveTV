@@ -205,17 +205,7 @@ class CastrAPIService: ObservableObject {
         }.resume()
     }
     
-    private func createCategories(from videoData: [VideoData]) {
-        let allVideos = videoData
-        
-        categories = [
-            Category(name: "All", image: "ministry_now", color: .blue, videos: allVideos),
-            Category(name: "Recent", image: "joni", color: .purple, videos: Array(allVideos.sorted(by: { $0.creationTime > $1.creationTime }).prefix(20))),
-            Category(name: "Live TV", image: "rebecca", color: .red, videos: allVideos.filter { $0.fileName.lowercased().contains("live") }),
-            Category(name: "Sermons", image: "healing", color: .green, videos: allVideos.filter { $0.fileName.lowercased().contains("sermon") || $0.fileName.lowercased().contains("truth") || $0.fileName.lowercased().contains("daniel") || $0.fileName.lowercased().contains("acts") }),
-            Category(name: "Shows", image: "marcus", color: .orange, videos: allVideos.filter { $0.fileName.lowercased().contains("show") || $0.fileName.lowercased().contains("voice") || $0.fileName.lowercased().contains("awaken") })
-        ]
-    }
+   
     
     private func handleError(_ message: String) {
         errorMessage = message
@@ -372,5 +362,331 @@ class CastrAPIService: ObservableObject {
                 }
             }
         }
+    }
+}
+
+// MARK: - CastrAPIService Extension for Enhanced Categorization
+extension CastrAPIService {
+    
+    // Replace the existing createCategories method with this enhanced version
+    func createCategories(from videoData: [VideoData]) {
+        let allVideos = videoData
+        var categories: [Category] = []
+        
+        // 1. All Videos Category (Always first)
+        categories.append(Category(
+            name: "All Videos",
+            image: "all_videos",
+            color: Color(red: 0.2, green: 0.6, blue: 1.0),
+            videos: allVideos
+        ))
+        
+        // 2. Recent Uploads (Last 30 days)
+        let recentVideos = getRecentVideos(from: allVideos, days: 30)
+        if !recentVideos.isEmpty {
+            categories.append(Category(
+                name: "Recently Added",
+                image: "recent_videos",
+                color: Color(red: 0.9, green: 0.3, blue: 0.9),
+                videos: recentVideos
+            ))
+        }
+        
+        // 3. Ministries & Churches
+        let ministryVideos = allVideos.filter { video in
+            let fileName = video.fileName.lowercased()
+            let author = video.author.lowercased()
+            return fileName.contains("ministries") ||
+                   fileName.contains("church") ||
+                   fileName.contains("ct townsend") ||
+                   fileName.contains("sandra hancock") ||
+                   fileName.contains("ignited church") ||
+                   fileName.contains("grace pointe") ||
+                   fileName.contains("united christian") ||
+                   fileName.contains("evangelistic") ||
+                   fileName.contains("higher praise") ||
+                   fileName.contains("oasis") ||
+                   author.contains("oasis") ||
+                   author.contains("greaterlove")
+        }
+        if !ministryVideos.isEmpty {
+            categories.append(Category(
+                name: "Ministries & Churches",
+                image: "ministries",
+                color: Color(red: 0.3, green: 0.7, blue: 0.4),
+                videos: ministryVideos
+            ))
+        }
+        
+        // 4. Teaching & Truth Series
+        let teachingVideos = allVideos.filter { video in
+            let fileName = video.fileName.lowercased()
+            return fileName.contains("truth") ||
+                   fileName.contains("matters") ||
+                   fileName.contains("teaching") ||
+                   fileName.contains("biblical") ||
+                   fileName.contains("study") ||
+                   fileName.contains("lesson") ||
+                   fileName.contains("works of god") ||
+                   fileName.contains("faith over fear")
+        }
+        if !teachingVideos.isEmpty {
+            categories.append(Category(
+                name: "Biblical Teaching",
+                image: "teaching",
+                color: Color(red: 0.8, green: 0.4, blue: 0.2),
+                videos: teachingVideos
+            ))
+        }
+        
+        // 5. Inspirational & Testimony
+        let inspirationalVideos = allVideos.filter { video in
+            let fileName = video.fileName.lowercased()
+            return fileName.contains("testimony") ||
+                   fileName.contains("hope") ||
+                   fileName.contains("inspiration") ||
+                   fileName.contains("voice of hope") ||
+                   fileName.contains("fresh oil") ||
+                   fileName.contains("second chances") ||
+                   fileName.contains("emily testimony") ||
+                   fileName.contains("prophecy") ||
+                   fileName.contains("promise") ||
+                   fileName.contains("pain precedes") ||
+                   fileName.contains("naked") ||
+                   fileName.contains("afraid")
+        }
+        if !inspirationalVideos.isEmpty {
+            categories.append(Category(
+                name: "Inspirational & Testimony",
+                image: "inspirational",
+                color: Color(red: 1.0, green: 0.7, blue: 0.3),
+                videos: inspirationalVideos
+            ))
+        }
+        
+        // 6. Biblical Studies (Books of the Bible)
+        let biblicalStudyVideos = allVideos.filter { video in
+            let fileName = video.fileName.lowercased()
+            return fileName.contains("daniel") ||
+                   fileName.contains("acts") ||
+                   fileName.contains("psalms") ||
+                   fileName.contains("john") ||
+                   fileName.contains("matthew") ||
+                   fileName.contains("romans") ||
+                   fileName.contains("genesis") ||
+                   fileName.contains("revelation") ||
+                   fileName.range(of: "daniel \\d+", options: .regularExpression) != nil ||
+                   fileName.range(of: "psalms \\d+", options: .regularExpression) != nil
+        }
+        if !biblicalStudyVideos.isEmpty {
+            categories.append(Category(
+                name: "Biblical Studies",
+                image: "biblical_studies",
+                color: Color(red: 0.4, green: 0.3, blue: 0.8),
+                videos: biblicalStudyVideos
+            ))
+        }
+        
+        // 7. Faith & Worship
+        let faithVideos = allVideos.filter { video in
+            let fileName = video.fileName.lowercased()
+            return fileName.contains("faith") ||
+                   fileName.contains("worship") ||
+                   fileName.contains("praise") ||
+                   fileName.contains("prayer") ||
+                   fileName.contains("refuge") ||
+                   fileName.contains("closer") ||
+                   fileName.contains("awaken") ||
+                   fileName.contains("god is my refuge") ||
+                   fileName.contains("closer than before") ||
+                   fileName.contains("land of good enough")
+        }
+        if !faithVideos.isEmpty {
+            categories.append(Category(
+                name: "Faith & Worship",
+                image: "faith_worship",
+                color: Color(red: 0.6, green: 0.2, blue: 0.8),
+                videos: faithVideos
+            ))
+        }
+        
+        // 8. Series & Shows (Episode-based content)
+        let seriesVideos = allVideos.filter { video in
+            let fileName = video.fileName.lowercased()
+            return fileName.contains("ep") ||
+                   fileName.contains("episode") ||
+                   fileName.contains("part") ||
+                   fileName.contains("pt") ||
+                   fileName.contains("series") ||
+                   fileName.contains("show") ||
+                   fileName.range(of: "ep\\d+", options: .regularExpression) != nil ||
+                   fileName.range(of: "part \\d+", options: .regularExpression) != nil
+        }
+        if !seriesVideos.isEmpty {
+            categories.append(Category(
+                name: "Series & Shows",
+                image: "series_shows",
+                color: Color(red: 0.2, green: 0.8, blue: 0.8),
+                videos: seriesVideos
+            ))
+        }
+        
+        // 9. Live Content & Events
+        let liveVideos = allVideos.filter { video in
+            let fileName = video.fileName.lowercased()
+            return fileName.contains("live") ||
+                   fileName.contains("stream") ||
+                   fileName.contains("event") ||
+                   fileName.contains("broadcast") ||
+                   fileName.contains("replay") ||
+                   fileName.contains("airdate")
+        }
+        if !liveVideos.isEmpty {
+            categories.append(Category(
+                name: "Live & Events",
+                image: "live_events",
+                color: Color.red,
+                videos: liveVideos
+            ))
+        }
+        
+        // 10. Author-based categories for prominent authors
+        createAuthorBasedCategories(from: allVideos, categories: &categories)
+        
+        // Sort categories by video count (except "All Videos" which stays first)
+        let allVideosCategory = categories.first { $0.name == "All Videos" }
+        let otherCategories = categories.filter { $0.name != "All Videos" }
+            .sorted { $0.videos.count > $1.videos.count }
+        
+        var finalCategories: [Category] = []
+        if let allVideos = allVideosCategory {
+            finalCategories.append(allVideos)
+        }
+        finalCategories.append(contentsOf: otherCategories)
+        
+        self.categories = finalCategories
+    }
+    
+    // MARK: - Helper Methods for Enhanced Categorization
+    
+    private func getRecentVideos(from videos: [VideoData], days: Int) -> [VideoData] {
+        let calendar = Calendar.current
+        let cutoffDate = calendar.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        let dateFormatter = ISO8601DateFormatter()
+        
+        return videos.filter { video in
+            guard let date = dateFormatter.date(from: video.creationTime) else { return false }
+            return date > cutoffDate
+        }.sorted { video1, video2 in
+            let date1 = dateFormatter.date(from: video1.creationTime) ?? Date.distantPast
+            let date2 = dateFormatter.date(from: video2.creationTime) ?? Date.distantPast
+            return date1 > date2
+        }
+    }
+    
+    private func createAuthorBasedCategories(from videos: [VideoData], categories: inout [Category]) {
+        // Group videos by author
+        let authorGroups = Dictionary(grouping: videos) { $0.author }
+        
+        // Create categories for authors with significant content (5+ videos)
+        let significantAuthors = authorGroups.filter { $1.count >= 5 }
+        
+        for (author, authorVideos) in significantAuthors {
+            let authorName = getReadableAuthorName(from: author)
+            
+            // Skip if we already have a more specific category for this content
+            if !shouldCreateAuthorCategory(for: authorName, videos: authorVideos) {
+                continue
+            }
+            
+            categories.append(Category(
+                name: authorName,
+                image: "author_\(author)",
+                color: getAuthorColor(for: author),
+                videos: authorVideos.sorted { video1, video2 in
+                    let dateFormatter = ISO8601DateFormatter()
+                    let date1 = dateFormatter.date(from: video1.creationTime) ?? Date.distantPast
+                    let date2 = dateFormatter.date(from: video2.creationTime) ?? Date.distantPast
+                    return date1 > date2
+                }
+            ))
+        }
+    }
+    
+    private func getReadableAuthorName(from email: String) -> String {
+        // Convert email to readable name
+        if email.contains("kaylen@greaterlove.tv") {
+            return "Greater Love Productions"
+        } else if email.contains("angel@oasisministries.com") {
+            return "Oasis Ministries"
+        } else {
+            // Extract name from email
+            let username = email.components(separatedBy: "@").first ?? email
+            return username.capitalized.replacingOccurrences(of: ".", with: " ")
+        }
+    }
+    
+    private func shouldCreateAuthorCategory(for authorName: String, videos: [VideoData]) -> Bool {
+        // Don't create author categories if the content is better categorized elsewhere
+        if authorName.contains("Greater Love") && videos.count < 10 {
+            return false
+        }
+        return true
+    }
+    
+    private func getAuthorColor(for author: String) -> Color {
+        // Assign consistent colors based on author
+        switch author {
+        case let email where email.contains("kaylen"):
+            return Color(red: 0.9, green: 0.4, blue: 0.1)
+        case let email where email.contains("angel"):
+            return Color(red: 0.1, green: 0.6, blue: 0.9)
+        default:
+            return Color(red: 0.5, green: 0.5, blue: 0.8)
+        }
+    }
+    
+    // MARK: - Category Analytics
+    
+    func getCategoryAnalytics() -> [String: Any] {
+        var analytics: [String: Any] = [:]
+        
+        analytics["total_categories"] = categories.count
+        analytics["total_videos"] = videoData.count
+        analytics["average_videos_per_category"] = categories.isEmpty ? 0 : videoData.count / categories.count
+        
+        let categorySizes = categories.map { ($0.name, $0.videos.count) }
+        analytics["largest_category"] = categorySizes.max { $0.1 < $1.1 }
+        analytics["smallest_category"] = categorySizes.min { $0.1 < $1.1 }
+        
+        return analytics
+    }
+    
+    // MARK: - Search and Filter Methods
+    
+    func searchVideos(query: String) -> [VideoData] {
+        let lowercaseQuery = query.lowercased()
+        
+        return videoData.filter { video in
+            video.fileName.lowercased().contains(lowercaseQuery) ||
+            video.author.lowercased().contains(lowercaseQuery)
+        }.sorted { video1, video2 in
+            let dateFormatter = ISO8601DateFormatter()
+            let date1 = dateFormatter.date(from: video1.creationTime) ?? Date.distantPast
+            let date2 = dateFormatter.date(from: video2.creationTime) ?? Date.distantPast
+            return date1 > date2
+        }
+    }
+    
+    func getVideosFromCategory(named categoryName: String) -> [VideoData] {
+        return categories.first { $0.name == categoryName }?.videos ?? []
+    }
+    
+    func getPopularCategories(limit: Int = 5) -> [Category] {
+        return categories
+            .filter { $0.name != "All Videos" }
+            .sorted { $0.videos.count > $1.videos.count }
+            .prefix(limit)
+            .map { $0 }
     }
 }
