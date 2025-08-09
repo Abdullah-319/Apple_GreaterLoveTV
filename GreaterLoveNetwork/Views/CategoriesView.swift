@@ -45,6 +45,8 @@ struct CategoriesView: View {
                 LiveTVPlayerView(stream: stream)
             } else if let videoData = selectedContent as? VideoData {
                 VideoDataPlayerView(videoData: videoData)
+            } else if let episode = selectedContent as? Episode {
+                VideoDataPlayerView(videoData: convertEpisodeToVideoData(episode))
             }
         }
         .sheet(isPresented: $showingCategoryDetail) {
@@ -93,7 +95,7 @@ struct CategoriesView: View {
                             .frame(width: 1, height: 40)
                         
                         VStack(alignment: .center, spacing: 4) {
-                            Text("\(apiService.videoData.count)")
+                            Text("\(getTotalVideoCount())")
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.white)
                             Text("Videos")
@@ -224,7 +226,45 @@ struct CategoriesView: View {
     // MARK: - Helper Methods
     
     private func findVideoData(by videoId: String) -> VideoData? {
-        return apiService.videoData.first { $0._id == videoId }
+        // First try to find in the legacy videoData array
+        if let videoData = apiService.videoData.first(where: { $0._id == videoId }) {
+            return videoData
+        }
+        
+        // If not found, try to find in episodes and convert
+        if let episode = apiService.allEpisodes.first(where: { $0._id == videoId }) {
+            return convertEpisodeToVideoData(episode)
+        }
+        
+        return nil
+    }
+    
+    private func getTotalVideoCount() -> Int {
+        // Return the total count from both videoData and allEpisodes, avoiding duplicates
+        let videoDataIds = Set(apiService.videoData.map { $0._id })
+        let episodeIds = Set(apiService.allEpisodes.map { $0._id })
+        
+        // Use the larger count or combine if they're different data sets
+        return max(videoDataIds.count, episodeIds.count)
+    }
+    
+    private func convertEpisodeToVideoData(_ episode: Episode) -> VideoData {
+        return VideoData(
+            dataId: episode.episodeId,
+            fileName: episode.fileName,
+            enabled: episode.enabled,
+            bytes: episode.bytes,
+            mediaInfo: episode.mediaInfo,
+            encodingRequired: episode.encodingRequired,
+            precedence: episode.precedence,
+            author: episode.author,
+            creationTime: episode.creationTime,
+            _id: episode._id,
+            playback: VideoPlayback(
+                embed_url: episode.playback?.embed_url,
+                hls_url: episode.playback?.hls_url
+            )
+        )
     }
 }
 

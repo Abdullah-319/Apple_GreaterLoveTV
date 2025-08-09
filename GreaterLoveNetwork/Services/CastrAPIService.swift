@@ -3,20 +3,25 @@ import Foundation
 import AVKit
 import UIKit
 
-// MARK: - API Service
+// MARK: - Enhanced API Service for Shows and Episodes
 class CastrAPIService: ObservableObject {
     private let baseURL = "https://api.castr.com/v2"
     private let accessToken = "5aLoKjrNjly4"
     private let secretKey = "UjTCq8wOj76vjXznGFzdbMRzAkFq6VlJElBQ"
     
     @Published var liveStreams: [LiveStream] = []
-    @Published var videos: [Video] = []
-    @Published var videoData: [VideoData] = []
-    @Published var categories: [Category] = []
+    @Published var shows: [Show] = [] // renamed from videos
+    @Published var allEpisodes: [Episode] = [] // renamed from videoData
+    @Published var showCollections: [ShowCollection] = [] // renamed from categories
     @Published var recordings: [Recording] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var thumbnailStates: [String: ThumbnailState] = [:]
+    
+    // Backward compatibility properties - FIXED TYPES
+    @Published var videos: [Show] = []
+    @Published var videoData: [VideoData] = [] // FIXED: Changed from [Episode] to [VideoData]
+    @Published var categories: [Category] = []
     
     private var authHeader: String {
         let credentials = "\(accessToken):\(secretKey)"
@@ -28,7 +33,7 @@ class CastrAPIService: ObservableObject {
     func fetchAllContent() {
         testAuthentication()
         addStaticLiveStreams()
-        fetchVideos()
+        fetchShows() // renamed from fetchVideos
         fetchLiveStreams()
     }
     
@@ -84,7 +89,7 @@ class CastrAPIService: ObservableObject {
         }
     }
     
-    func fetchVideos() {
+    func fetchShows() { // renamed from fetchVideos
         isLoading = true
         errorMessage = nil
         
@@ -125,24 +130,30 @@ class CastrAPIService: ObservableObject {
                 }
                 
                 do {
-                    let response = try JSONDecoder().decode(VideosResponse.self, from: data)
-                    self?.videos = response.docs.filter { $0.enabled }
+                    let response = try JSONDecoder().decode(ShowsResponse.self, from: data)
+                    self?.shows = response.docs.filter { $0.enabled }
                     
-                    var allVideoData: [VideoData] = []
-                    for video in response.docs where video.enabled {
-                        allVideoData.append(contentsOf: video.data)
+                    var allEpisodes: [Episode] = []
+                    for show in response.docs where show.enabled {
+                        allEpisodes.append(contentsOf: show.episodes)
                     }
                     
-                    let enabledVideoData = allVideoData.filter { $0.enabled }
-                    self?.videoData = enabledVideoData
-                    self?.createCategories(from: enabledVideoData)
+                    let enabledEpisodes = allEpisodes.filter { $0.enabled }
+                    self?.allEpisodes = enabledEpisodes
+                    
+                    // Update backward compatibility properties - FIXED CONVERSION
+                    self?.videos = self?.shows ?? []
+                    self?.videoData = enabledEpisodes.map { self?.convertEpisodeToVideoData($0) ?? VideoData(dataId: "", fileName: "", enabled: false, bytes: 0, mediaInfo: nil, encodingRequired: false, precedence: 0, author: "", creationTime: "", _id: "", playback: nil) }.filter { !$0.fileName.isEmpty }
+                    
+                    self?.createShowCollections(from: response.docs.filter { $0.enabled })
+                    self?.createCategories(from: enabledEpisodes) // Backward compatibility
                     self?.isLoading = false
                     
-                    print("Successfully loaded \(enabledVideoData.count) videos from \(response.docs.count) documents")
+                    print("Successfully loaded \(enabledEpisodes.count) episodes from \(response.docs.count) shows")
                     
                 } catch {
-                    print("Videos Decoding error: \(error)")
-                    self?.handleError("Failed to decode videos: \(error.localizedDescription)")
+                    print("Shows Decoding error: \(error)")
+                    self?.handleError("Failed to decode shows: \(error.localizedDescription)")
                     self?.isLoading = false
                 }
             }
@@ -205,23 +216,21 @@ class CastrAPIService: ObservableObject {
         }.resume()
     }
     
-   
-    
     private func handleError(_ message: String) {
         errorMessage = message
         isLoading = false
         print("Error: \(message)")
     }
     
-    func loadThumbnail(for videoData: VideoData) {
+    func loadThumbnail(for episode: Episode) { // updated parameter type
         // Set loading state
         DispatchQueue.main.async {
-            self.thumbnailStates[videoData._id] = .loading
+            self.thumbnailStates[episode._id] = .loading
         }
         
-        guard let embedURL = videoData.playback?.embed_url else {
+        guard let embedURL = episode.playback?.embed_url else {
             DispatchQueue.main.async {
-                self.thumbnailStates[videoData._id] = .failed
+                self.thumbnailStates[episode._id] = .failed
             }
             return
         }
@@ -229,17 +238,59 @@ class CastrAPIService: ObservableObject {
         extractMP4URL(from: embedURL) { [weak self] extractedURL in
             guard let extractedURL = extractedURL else {
                 DispatchQueue.main.async {
-                    self?.thumbnailStates[videoData._id] = .failed
+                    self?.thumbnailStates[episode._id] = .failed
                 }
                 return
             }
             
             if extractedURL.contains(".m3u8") {
-                self?.generateThumbnailFromHLS(extractedURL, for: videoData)
+                self?.generateThumbnailFromHLS(extractedURL, for: episode)
             } else {
-                self?.generateThumbnailFromMP4(extractedURL, for: videoData)
+                self?.generateThumbnailFromMP4(extractedURL, for: episode)
             }
         }
+    }
+    
+    // Backward compatibility method
+    func loadThumbnail(for videoData: VideoData) {
+        // Convert VideoData to Episode for processing
+        let episode = Episode(
+            episodeId: videoData.dataId,
+            fileName: videoData.fileName,
+            enabled: videoData.enabled,
+            bytes: videoData.bytes,
+            mediaInfo: videoData.mediaInfo,
+            encodingRequired: videoData.encodingRequired,
+            precedence: videoData.precedence,
+            author: videoData.author,
+            creationTime: videoData.creationTime,
+            _id: videoData._id,
+            playback: EpisodePlayback(
+                embed_url: videoData.playback?.embed_url,
+                hls_url: videoData.playback?.hls_url
+            )
+        )
+        loadThumbnail(for: episode)
+    }
+    
+    // MARK: - Helper method to convert Episode to VideoData
+    private func convertEpisodeToVideoData(_ episode: Episode) -> VideoData {
+        return VideoData(
+            dataId: episode.episodeId,
+            fileName: episode.fileName,
+            enabled: episode.enabled,
+            bytes: episode.bytes,
+            mediaInfo: episode.mediaInfo,
+            encodingRequired: episode.encodingRequired,
+            precedence: episode.precedence,
+            author: episode.author,
+            creationTime: episode.creationTime,
+            _id: episode._id,
+            playback: VideoPlayback(
+                embed_url: episode.playback?.embed_url,
+                hls_url: episode.playback?.hls_url
+            )
+        )
     }
     
     func extractMP4URL(from embedURL: String, completion: @escaping (String?) -> Void) {
@@ -302,10 +353,10 @@ class CastrAPIService: ObservableObject {
         }.resume()
     }
     
-    private func generateThumbnailFromHLS(_ hlsURL: String, for videoData: VideoData) {
+    private func generateThumbnailFromHLS(_ hlsURL: String, for episode: Episode) {
         guard let url = URL(string: hlsURL) else {
             DispatchQueue.main.async {
-                self.thumbnailStates[videoData._id] = .failed
+                self.thumbnailStates[episode._id] = .failed
             }
             return
         }
@@ -322,21 +373,21 @@ class CastrAPIService: ObservableObject {
                 if let cgImage = cgImage {
                     let thumbnail = UIImage(cgImage: cgImage)
                     DispatchQueue.main.async {
-                        self?.thumbnailStates[videoData._id] = .loaded(thumbnail)
+                        self?.thumbnailStates[episode._id] = .loaded(thumbnail)
                     }
                 } else {
                     DispatchQueue.main.async {
-                        self?.thumbnailStates[videoData._id] = .failed
+                        self?.thumbnailStates[episode._id] = .failed
                     }
                 }
             }
         }
     }
     
-    private func generateThumbnailFromMP4(_ mp4URL: String, for videoData: VideoData) {
+    private func generateThumbnailFromMP4(_ mp4URL: String, for episode: Episode) {
         guard let url = URL(string: mp4URL) else {
             DispatchQueue.main.async {
-                self.thumbnailStates[videoData._id] = .failed
+                self.thumbnailStates[episode._id] = .failed
             }
             return
         }
@@ -353,11 +404,11 @@ class CastrAPIService: ObservableObject {
                 if let cgImage = cgImage {
                     let thumbnail = UIImage(cgImage: cgImage)
                     DispatchQueue.main.async {
-                        self?.thumbnailStates[videoData._id] = .loaded(thumbnail)
+                        self?.thumbnailStates[episode._id] = .loaded(thumbnail)
                     }
                 } else {
                     DispatchQueue.main.async {
-                        self?.thumbnailStates[videoData._id] = .failed
+                        self?.thumbnailStates[episode._id] = .failed
                     }
                 }
             }
@@ -365,328 +416,198 @@ class CastrAPIService: ObservableObject {
     }
 }
 
-// MARK: - CastrAPIService Extension for Enhanced Categorization
+// MARK: - CastrAPIService Extension for Show Collections
 extension CastrAPIService {
     
-    // Replace the existing createCategories method with this enhanced version
-    func createCategories(from videoData: [VideoData]) {
-        let allVideos = videoData
+    func createShowCollections(from shows: [Show]) {
+        var collections: [ShowCollection] = []
+        
+        // 1. All Shows Collection (Always first)
+        collections.append(ShowCollection(
+            category: .all,
+            shows: shows
+        ))
+        
+        // 2. Group shows by their categories
+        let groupedShows = Dictionary(grouping: shows) { $0.showCategory }
+        
+        for category in ShowCategory.allCases {
+            if category == .all { continue } // Skip "all" as it's already added
+            
+            if let showsInCategory = groupedShows[category], !showsInCategory.isEmpty {
+                collections.append(ShowCollection(
+                    category: category,
+                    shows: showsInCategory.sorted { show1, show2 in
+                        // Sort by episode count (descending) then by name
+                        if show1.episodeCount == show2.episodeCount {
+                            return show1.displayName < show2.displayName
+                        }
+                        return show1.episodeCount > show2.episodeCount
+                    }
+                ))
+            }
+        }
+        
+        // Sort collections by total episodes (except "All Shows" which stays first)
+        let allShowsCollection = collections.first { $0.category == .all }
+        let otherCollections = collections.filter { $0.category != .all }
+            .sorted { $0.totalEpisodes > $1.totalEpisodes }
+        
+        var finalCollections: [ShowCollection] = []
+        if let allShows = allShowsCollection {
+            finalCollections.append(allShows)
+        }
+        finalCollections.append(contentsOf: otherCollections)
+        
+        self.showCollections = finalCollections
+    }
+    
+    // Backward compatibility method
+    func createCategories(from episodes: [Episode]) {
         var categories: [Category] = []
         
-        // 1. All Videos Category (Always first)
+        // Convert episodes to VideoData for backward compatibility
+        let videoDataList = episodes.map { episode in
+            self.convertEpisodeToVideoData(episode)
+        }
+        
+        // Create basic categories for backward compatibility
         categories.append(Category(
             name: "All Videos",
             image: "all_videos",
             color: Color(red: 0.2, green: 0.6, blue: 1.0),
-            videos: allVideos
+            videos: videoDataList
         ))
         
-        // 2. Recent Uploads (Last 30 days)
-        let recentVideos = getRecentVideos(from: allVideos, days: 30)
-        if !recentVideos.isEmpty {
-            categories.append(Category(
-                name: "Recently Added",
-                image: "recent_videos",
-                color: Color(red: 0.9, green: 0.3, blue: 0.9),
-                videos: recentVideos
-            ))
-        }
-        
-        // 3. Ministries & Churches
-        let ministryVideos = allVideos.filter { video in
-            let fileName = video.fileName.lowercased()
-            let author = video.author.lowercased()
-            return fileName.contains("ministries") ||
-                   fileName.contains("church") ||
-                   fileName.contains("ct townsend") ||
-                   fileName.contains("sandra hancock") ||
-                   fileName.contains("ignited church") ||
-                   fileName.contains("grace pointe") ||
-                   fileName.contains("united christian") ||
-                   fileName.contains("evangelistic") ||
-                   fileName.contains("higher praise") ||
-                   fileName.contains("oasis") ||
-                   author.contains("oasis") ||
-                   author.contains("greaterlove")
-        }
-        if !ministryVideos.isEmpty {
-            categories.append(Category(
-                name: "Ministries & Churches",
-                image: "ministries",
-                color: Color(red: 0.3, green: 0.7, blue: 0.4),
-                videos: ministryVideos
-            ))
-        }
-        
-        // 4. Teaching & Truth Series
-        let teachingVideos = allVideos.filter { video in
-            let fileName = video.fileName.lowercased()
-            return fileName.contains("truth") ||
-                   fileName.contains("matters") ||
-                   fileName.contains("teaching") ||
-                   fileName.contains("biblical") ||
-                   fileName.contains("study") ||
-                   fileName.contains("lesson") ||
-                   fileName.contains("works of god") ||
-                   fileName.contains("faith over fear")
-        }
-        if !teachingVideos.isEmpty {
-            categories.append(Category(
-                name: "Biblical Teaching",
-                image: "teaching",
-                color: Color(red: 0.8, green: 0.4, blue: 0.2),
-                videos: teachingVideos
-            ))
-        }
-        
-        // 5. Inspirational & Testimony
-        let inspirationalVideos = allVideos.filter { video in
-            let fileName = video.fileName.lowercased()
-            return fileName.contains("testimony") ||
-                   fileName.contains("hope") ||
-                   fileName.contains("inspiration") ||
-                   fileName.contains("voice of hope") ||
-                   fileName.contains("fresh oil") ||
-                   fileName.contains("second chances") ||
-                   fileName.contains("emily testimony") ||
-                   fileName.contains("prophecy") ||
-                   fileName.contains("promise") ||
-                   fileName.contains("pain precedes") ||
-                   fileName.contains("naked") ||
-                   fileName.contains("afraid")
-        }
-        if !inspirationalVideos.isEmpty {
-            categories.append(Category(
-                name: "Inspirational & Testimony",
-                image: "inspirational",
-                color: Color(red: 1.0, green: 0.7, blue: 0.3),
-                videos: inspirationalVideos
-            ))
-        }
-        
-        // 6. Biblical Studies (Books of the Bible)
-        let biblicalStudyVideos = allVideos.filter { video in
-            let fileName = video.fileName.lowercased()
-            return fileName.contains("daniel") ||
-                   fileName.contains("acts") ||
-                   fileName.contains("psalms") ||
-                   fileName.contains("john") ||
-                   fileName.contains("matthew") ||
-                   fileName.contains("romans") ||
-                   fileName.contains("genesis") ||
-                   fileName.contains("revelation") ||
-                   fileName.range(of: "daniel \\d+", options: .regularExpression) != nil ||
-                   fileName.range(of: "psalms \\d+", options: .regularExpression) != nil
-        }
-        if !biblicalStudyVideos.isEmpty {
-            categories.append(Category(
-                name: "Biblical Studies",
-                image: "biblical_studies",
-                color: Color(red: 0.4, green: 0.3, blue: 0.8),
-                videos: biblicalStudyVideos
-            ))
-        }
-        
-        // 7. Faith & Worship
-        let faithVideos = allVideos.filter { video in
-            let fileName = video.fileName.lowercased()
-            return fileName.contains("faith") ||
-                   fileName.contains("worship") ||
-                   fileName.contains("praise") ||
-                   fileName.contains("prayer") ||
-                   fileName.contains("refuge") ||
-                   fileName.contains("closer") ||
-                   fileName.contains("awaken") ||
-                   fileName.contains("god is my refuge") ||
-                   fileName.contains("closer than before") ||
-                   fileName.contains("land of good enough")
-        }
-        if !faithVideos.isEmpty {
-            categories.append(Category(
-                name: "Faith & Worship",
-                image: "faith_worship",
-                color: Color(red: 0.6, green: 0.2, blue: 0.8),
-                videos: faithVideos
-            ))
-        }
-        
-        // 8. Series & Shows (Episode-based content)
-        let seriesVideos = allVideos.filter { video in
-            let fileName = video.fileName.lowercased()
-            return fileName.contains("ep") ||
-                   fileName.contains("episode") ||
-                   fileName.contains("part") ||
-                   fileName.contains("pt") ||
-                   fileName.contains("series") ||
-                   fileName.contains("show") ||
-                   fileName.range(of: "ep\\d+", options: .regularExpression) != nil ||
-                   fileName.range(of: "part \\d+", options: .regularExpression) != nil
-        }
-        if !seriesVideos.isEmpty {
-            categories.append(Category(
-                name: "Series & Shows",
-                image: "series_shows",
-                color: Color(red: 0.2, green: 0.8, blue: 0.8),
-                videos: seriesVideos
-            ))
-        }
-        
-        // 9. Live Content & Events
-        let liveVideos = allVideos.filter { video in
-            let fileName = video.fileName.lowercased()
-            return fileName.contains("live") ||
-                   fileName.contains("stream") ||
-                   fileName.contains("event") ||
-                   fileName.contains("broadcast") ||
-                   fileName.contains("replay") ||
-                   fileName.contains("airdate")
-        }
-        if !liveVideos.isEmpty {
-            categories.append(Category(
-                name: "Live & Events",
-                image: "live_events",
-                color: Color.red,
-                videos: liveVideos
-            ))
-        }
-        
-        // 10. Author-based categories for prominent authors
-        createAuthorBasedCategories(from: allVideos, categories: &categories)
-        
-        // Sort categories by video count (except "All Videos" which stays first)
-        let allVideosCategory = categories.first { $0.name == "All Videos" }
-        let otherCategories = categories.filter { $0.name != "All Videos" }
-            .sorted { $0.videos.count > $1.videos.count }
-        
-        var finalCategories: [Category] = []
-        if let allVideos = allVideosCategory {
-            finalCategories.append(allVideos)
-        }
-        finalCategories.append(contentsOf: otherCategories)
-        
-        self.categories = finalCategories
-    }
-    
-    // MARK: - Helper Methods for Enhanced Categorization
-    
-    private func getRecentVideos(from videos: [VideoData], days: Int) -> [VideoData] {
-        let calendar = Calendar.current
-        let cutoffDate = calendar.date(byAdding: .day, value: -days, to: Date()) ?? Date()
-        let dateFormatter = ISO8601DateFormatter()
-        
-        return videos.filter { video in
-            guard let date = dateFormatter.date(from: video.creationTime) else { return false }
-            return date > cutoffDate
-        }.sorted { video1, video2 in
-            let date1 = dateFormatter.date(from: video1.creationTime) ?? Date.distantPast
-            let date2 = dateFormatter.date(from: video2.creationTime) ?? Date.distantPast
-            return date1 > date2
-        }
-    }
-    
-    private func createAuthorBasedCategories(from videos: [VideoData], categories: inout [Category]) {
-        // Group videos by author
-        let authorGroups = Dictionary(grouping: videos) { $0.author }
-        
-        // Create categories for authors with significant content (5+ videos)
-        let significantAuthors = authorGroups.filter { $1.count >= 5 }
-        
-        for (author, authorVideos) in significantAuthors {
-            let authorName = getReadableAuthorName(from: author)
-            
-            // Skip if we already have a more specific category for this content
-            if !shouldCreateAuthorCategory(for: authorName, videos: authorVideos) {
-                continue
+        // Group episodes by show category
+        let groupedEpisodes = Dictionary(grouping: episodes) { episode in
+            // Find the show this episode belongs to
+            let show = shows.first { show in
+                show.episodes.contains { $0._id == episode._id }
             }
-            
-            categories.append(Category(
-                name: authorName,
-                image: "author_\(author)",
-                color: getAuthorColor(for: author),
-                videos: authorVideos.sorted { video1, video2 in
-                    let dateFormatter = ISO8601DateFormatter()
-                    let date1 = dateFormatter.date(from: video1.creationTime) ?? Date.distantPast
-                    let date2 = dateFormatter.date(from: video2.creationTime) ?? Date.distantPast
-                    return date1 > date2
+            return show?.showCategory ?? .general
+        }
+        
+        for (category, episodeList) in groupedEpisodes {
+            if category != .all && !episodeList.isEmpty {
+                let videoDataForCategory = episodeList.map { episode in
+                    self.convertEpisodeToVideoData(episode)
                 }
-            ))
+                
+                categories.append(Category(
+                    name: category.rawValue,
+                    image: category.rawValue.lowercased().replacingOccurrences(of: " ", with: "_"),
+                    color: category.color,
+                    videos: videoDataForCategory
+                ))
+            }
         }
-    }
-    
-    private func getReadableAuthorName(from email: String) -> String {
-        // Convert email to readable name
-        if email.contains("kaylen@greaterlove.tv") {
-            return "Greater Love Productions"
-        } else if email.contains("angel@oasisministries.com") {
-            return "Oasis Ministries"
-        } else {
-            // Extract name from email
-            let username = email.components(separatedBy: "@").first ?? email
-            return username.capitalized.replacingOccurrences(of: ".", with: " ")
-        }
-    }
-    
-    private func shouldCreateAuthorCategory(for authorName: String, videos: [VideoData]) -> Bool {
-        // Don't create author categories if the content is better categorized elsewhere
-        if authorName.contains("Greater Love") && videos.count < 10 {
-            return false
-        }
-        return true
-    }
-    
-    private func getAuthorColor(for author: String) -> Color {
-        // Assign consistent colors based on author
-        switch author {
-        case let email where email.contains("kaylen"):
-            return Color(red: 0.9, green: 0.4, blue: 0.1)
-        case let email where email.contains("angel"):
-            return Color(red: 0.1, green: 0.6, blue: 0.9)
-        default:
-            return Color(red: 0.5, green: 0.5, blue: 0.8)
-        }
-    }
-    
-    // MARK: - Category Analytics
-    
-    func getCategoryAnalytics() -> [String: Any] {
-        var analytics: [String: Any] = [:]
         
-        analytics["total_categories"] = categories.count
-        analytics["total_videos"] = videoData.count
-        analytics["average_videos_per_category"] = categories.isEmpty ? 0 : videoData.count / categories.count
-        
-        let categorySizes = categories.map { ($0.name, $0.videos.count) }
-        analytics["largest_category"] = categorySizes.max { $0.1 < $1.1 }
-        analytics["smallest_category"] = categorySizes.min { $0.1 < $1.1 }
-        
-        return analytics
+        self.categories = categories
     }
     
     // MARK: - Search and Filter Methods
     
-    func searchVideos(query: String) -> [VideoData] {
+    func searchShows(query: String) -> [Show] {
         let lowercaseQuery = query.lowercased()
         
-        return videoData.filter { video in
-            video.fileName.lowercased().contains(lowercaseQuery) ||
-            video.author.lowercased().contains(lowercaseQuery)
-        }.sorted { video1, video2 in
+        return shows.filter { show in
+            show.displayName.lowercased().contains(lowercaseQuery) ||
+            show.showCategory.rawValue.lowercased().contains(lowercaseQuery)
+        }.sorted { show1, show2 in
+            // Prioritize exact matches, then by episode count
+            let name1 = show1.displayName.lowercased()
+            let name2 = show2.displayName.lowercased()
+            
+            if name1.hasPrefix(lowercaseQuery) && !name2.hasPrefix(lowercaseQuery) {
+                return true
+            } else if !name1.hasPrefix(lowercaseQuery) && name2.hasPrefix(lowercaseQuery) {
+                return false
+            } else {
+                return show1.episodeCount > show2.episodeCount
+            }
+        }
+    }
+    
+    func searchEpisodes(query: String) -> [Episode] {
+        let lowercaseQuery = query.lowercased()
+        
+        return allEpisodes.filter { episode in
+            episode.displayTitle.lowercased().contains(lowercaseQuery) ||
+            episode.author.lowercased().contains(lowercaseQuery)
+        }.sorted { episode1, episode2 in
             let dateFormatter = ISO8601DateFormatter()
-            let date1 = dateFormatter.date(from: video1.creationTime) ?? Date.distantPast
-            let date2 = dateFormatter.date(from: video2.creationTime) ?? Date.distantPast
+            let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
+            let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
             return date1 > date2
         }
     }
     
-    func getVideosFromCategory(named categoryName: String) -> [VideoData] {
-        return categories.first { $0.name == categoryName }?.videos ?? []
+    func getShowsFromCategory(_ category: ShowCategory) -> [Show] {
+        return showCollections.first { $0.category == category }?.shows ?? []
     }
     
-    func getPopularCategories(limit: Int = 5) -> [Category] {
-        return categories
-            .filter { $0.name != "All Videos" }
-            .sorted { $0.videos.count > $1.videos.count }
+    func getFeaturedShows(limit: Int = 6) -> [Show] {
+        return shows
+            .sorted { $0.episodeCount > $1.episodeCount }
             .prefix(limit)
             .map { $0 }
     }
+    
+    func getRecentEpisodes(limit: Int = 10) -> [Episode] {
+        return allEpisodes
+            .sorted { episode1, episode2 in
+                let dateFormatter = ISO8601DateFormatter()
+                let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
+                let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
+                return date1 > date2
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+    
+    // MARK: - Analytics Methods
+    
+    func getShowAnalytics() -> [String: Any] {
+        var analytics: [String: Any] = [:]
+        
+        analytics["total_shows"] = shows.count
+        analytics["total_episodes"] = allEpisodes.count
+        analytics["total_collections"] = showCollections.count
+        analytics["average_episodes_per_show"] = shows.isEmpty ? 0 : allEpisodes.count / shows.count
+        
+        let showEpisodeCounts = shows.map { ($0.displayName, $0.episodeCount) }
+        analytics["show_with_most_episodes"] = showEpisodeCounts.max { $0.1 < $1.1 }
+        analytics["show_with_least_episodes"] = showEpisodeCounts.min { $0.1 < $1.1 }
+        
+        let collectionSizes = showCollections.map { ($0.displayTitle, $0.totalEpisodes) }
+        analytics["largest_collection"] = collectionSizes.max { $0.1 < $1.1 }
+        
+        return analytics
+    }
+}
+
+// MARK: - Backward Compatibility Types
+struct VideoData: Codable, Identifiable {
+    let id = UUID()
+    let dataId: String
+    let fileName: String
+    let enabled: Bool
+    let bytes: Int
+    let mediaInfo: MediaInfo?
+    let encodingRequired: Bool
+    let precedence: Int
+    let author: String
+    let creationTime: String
+    let _id: String
+    let playback: VideoPlayback?
+    
+    enum CodingKeys: String, CodingKey {
+        case dataId = "id", fileName, enabled, bytes, mediaInfo, encodingRequired, precedence, author, creationTime, _id, playback
+    }
+}
+
+struct VideoPlayback: Codable {
+    let embed_url: String?
+    let hls_url: String?
 }

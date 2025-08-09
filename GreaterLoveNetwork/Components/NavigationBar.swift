@@ -4,7 +4,7 @@ import SwiftUI
 struct NavigationBar: View {
     @Binding var selectedItem: String
     
-    private let navItems = ["HOME", "ABOUT US", "ALL CATEGORIES"]
+    private let navItems = ["HOME", "ABOUT US", "ALL SHOWS", "INFO"]
     
     var body: some View {
         HStack {

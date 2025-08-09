@@ -1,22 +1,24 @@
 import Foundation
 
-// MARK: - Watch Progress Model
+// MARK: - Enhanced Watch Progress Model for Episodes
 struct WatchProgress: Codable, Identifiable {
     let id = UUID()
-    let videoId: String
-    let videoTitle: String
+    let episodeId: String // renamed from videoId for clarity
+    let episodeTitle: String // renamed from videoTitle
+    let showName: String? // new field to track which show this episode belongs to
     let currentTime: Double
     let duration: Double
     let progressPercentage: Double
     let lastWatched: Date
     
     enum CodingKeys: String, CodingKey {
-        case videoId, videoTitle, currentTime, duration, progressPercentage, lastWatched
+        case episodeId = "videoId", episodeTitle = "videoTitle", showName, currentTime, duration, progressPercentage, lastWatched
     }
     
-    init(videoId: String, videoTitle: String, currentTime: Double, duration: Double, progressPercentage: Double, lastWatched: Date) {
-        self.videoId = videoId
-        self.videoTitle = videoTitle
+    init(episodeId: String, episodeTitle: String, showName: String? = nil, currentTime: Double, duration: Double, progressPercentage: Double, lastWatched: Date) {
+        self.episodeId = episodeId
+        self.episodeTitle = episodeTitle
+        self.showName = showName
         self.currentTime = currentTime
         self.duration = duration
         self.progressPercentage = progressPercentage
@@ -25,8 +27,9 @@ struct WatchProgress: Codable, Identifiable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        videoId = try container.decode(String.self, forKey: .videoId)
-        videoTitle = try container.decode(String.self, forKey: .videoTitle)
+        episodeId = try container.decode(String.self, forKey: .episodeId)
+        episodeTitle = try container.decode(String.self, forKey: .episodeTitle)
+        showName = try container.decodeIfPresent(String.self, forKey: .showName)
         currentTime = try container.decode(Double.self, forKey: .currentTime)
         duration = try container.decode(Double.self, forKey: .duration)
         progressPercentage = try container.decode(Double.self, forKey: .progressPercentage)
@@ -35,13 +38,18 @@ struct WatchProgress: Codable, Identifiable {
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(videoId, forKey: .videoId)
-        try container.encode(videoTitle, forKey: .videoTitle)
+        try container.encode(episodeId, forKey: .episodeId)
+        try container.encode(episodeTitle, forKey: .episodeTitle)
+        try container.encodeIfPresent(showName, forKey: .showName)
         try container.encode(currentTime, forKey: .currentTime)
         try container.encode(duration, forKey: .duration)
         try container.encode(progressPercentage, forKey: .progressPercentage)
         try container.encode(lastWatched, forKey: .lastWatched)
     }
+    
+    // Computed properties for backward compatibility
+    var videoId: String { episodeId }
+    var videoTitle: String { episodeTitle }
     
     // Helper computed properties
     var formattedCurrentTime: String {

@@ -41,6 +41,8 @@ struct HomeView: View {
         .sheet(isPresented: $showingVideoPlayer) {
             if let stream = selectedContent as? LiveStream {
                 LiveTVPlayerView(stream: stream)
+            } else if let episode = selectedContent as? Episode {
+                VideoDataPlayerView(videoData: convertEpisodeToVideoData(episode))
             } else if let videoData = selectedContent as? VideoData {
                 VideoDataPlayerView(videoData: videoData)
             }
@@ -103,11 +105,11 @@ struct HomeView: View {
             withAnimation(.easeInOut(duration: 0.5)) {
                 if hasWatchHistory,
                    let firstVideo = progressManager.getContinueWatchingVideos().first,
-                   let videoData = findVideoData(by: firstVideo.videoId) {
-                    selectedContent = videoData
+                   let episode = findEpisode(by: firstVideo.videoId) {
+                    selectedContent = episode
                     showingVideoPlayer = true
-                } else if let recentVideo = apiService.videoData.first {
-                    selectedContent = recentVideo
+                } else if let recentEpisode = apiService.allEpisodes.first {
+                    selectedContent = recentEpisode
                     showingVideoPlayer = true
                 }
             }
@@ -150,12 +152,12 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 30) {
                     ForEach(progressManager.getContinueWatchingVideos()) { progress in
-                        if let videoData = findVideoData(by: progress.videoId) {
+                        if let episode = findEpisode(by: progress.videoId) {
                             ContinueWatchingCard(
-                                videoData: videoData,
+                                videoData: convertEpisodeToVideoData(episode),
                                 watchProgress: progress
                             ) {
-                                selectedContent = videoData
+                                selectedContent = episode
                                 showingVideoPlayer = true
                             }
                             .environmentObject(apiService)
@@ -189,18 +191,18 @@ struct HomeView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 30) {
-                    if apiService.isLoading || apiService.videoData.isEmpty {
+                    if apiService.isLoading || apiService.allEpisodes.isEmpty {
                         ForEach(0..<5, id: \.self) { _ in
                             LoadingCard()
                         }
                     } else {
-                        // Filter out videos that are already in continue watching
+                        // Filter out episodes that are already in continue watching
                         let continueWatchingIds = Set(progressManager.getContinueWatchingVideos().map { $0.videoId })
-                        let filteredVideos = getRecentVideos().filter { !continueWatchingIds.contains($0._id) }
+                        let filteredEpisodes = getRecentEpisodes().filter { !continueWatchingIds.contains($0._id) }
                         
-                        ForEach(Array(filteredVideos.prefix(10))) { videoData in
-                            VideoDataCard(videoData: videoData) {
-                                selectedContent = videoData
+                        ForEach(Array(filteredEpisodes.prefix(10))) { episode in
+                            VideoDataCard(videoData: convertEpisodeToVideoData(episode)) {
+                                selectedContent = episode
                                 showingVideoPlayer = true
                             }
                             .environmentObject(apiService)
@@ -236,7 +238,7 @@ struct HomeView: View {
                 HStack(spacing: 30) {
                     if apiService.isLoading || apiService.categories.isEmpty {
                         ForEach(0..<4, id: \.self) { index in
-                            EnhancedLoadingCategoryCard(index: index)
+                            LoadingCategoryCard()
                         }
                     } else {
                         // Show top 5 categories with most videos
@@ -349,26 +351,22 @@ struct HomeView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 50) {
-                    if apiService.isLoading || apiService.videoData.isEmpty {
+                    if apiService.isLoading || apiService.allEpisodes.isEmpty {
                         ForEach(0..<6, id: \.self) { index in
-                            LoadingShowCard(color: [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan][index])
+                            LoadingShowCard(color: getLoadingColors()[index])
                         }
                     } else {
-                        // Prioritize series and episodic content
-                        let seriesVideos = apiService.videoData.filter { video in
-                            let fileName = video.fileName.lowercased()
-                            return fileName.contains("ep") || fileName.contains("part") || fileName.contains("series")
-                        }
+                        // Get series and episodic content from Episodes
+                        let seriesEpisodes: [Episode] = getSeriesEpisodes()
+                        let episodesToShow: [Episode] = seriesEpisodes.isEmpty ? Array(apiService.allEpisodes.prefix(6)) : Array(seriesEpisodes.prefix(6))
                         
-                        let videosToShow = seriesVideos.isEmpty ? Array(apiService.videoData.prefix(6)) : Array(seriesVideos.prefix(6))
-                        
-                        ForEach(Array(videosToShow.enumerated()), id: \.element.id) { index, videoData in
-                            let colors: [Color] = [.blue, .purple, .green, .orange, .red, .cyan]
+                        ForEach(Array(episodesToShow.enumerated()), id: \.element.id) { index, episode in
+                            let colors: [Color] = getShowColors()
                             ShowCircleCard(
-                                videoData: videoData,
+                                videoData: convertEpisodeToVideoData(episode),
                                 color: colors[index % colors.count]
                             ) {
-                                selectedContent = videoData
+                                selectedContent = episode
                                 showingVideoPlayer = true
                             }
                             .environmentObject(apiService)
@@ -433,18 +431,52 @@ struct HomeView: View {
     
     // MARK: - Helper Methods
     
-    private func findVideoData(by videoId: String) -> VideoData? {
-        return apiService.videoData.first { $0._id == videoId }
+    private func findEpisode(by episodeId: String) -> Episode? {
+        return apiService.allEpisodes.first { $0._id == episodeId }
     }
     
-    private func getRecentVideos() -> [VideoData] {
-        // Sort videos by creation time (most recent first)
-        return apiService.videoData.sorted { video1, video2 in
+    private func getRecentEpisodes() -> [Episode] {
+        return apiService.allEpisodes.sorted { episode1, episode2 in
             let dateFormatter = ISO8601DateFormatter()
-            let date1 = dateFormatter.date(from: video1.creationTime) ?? Date.distantPast
-            let date2 = dateFormatter.date(from: video2.creationTime) ?? Date.distantPast
+            let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
+            let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
             return date1 > date2
         }
+    }
+    
+    private func getSeriesEpisodes() -> [Episode] {
+        return apiService.allEpisodes.filter { episode in
+            let fileName = episode.fileName.lowercased()
+            return fileName.contains("ep") || fileName.contains("part") || fileName.contains("series")
+        }
+    }
+    
+    private func getLoadingColors() -> [Color] {
+        return [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan]
+    }
+    
+    private func getShowColors() -> [Color] {
+        return [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan]
+    }
+    
+    // Helper function to convert Episode to VideoData for backward compatibility
+    private func convertEpisodeToVideoData(_ episode: Episode) -> VideoData {
+        return VideoData(
+            dataId: episode.episodeId,
+            fileName: episode.fileName,
+            enabled: episode.enabled,
+            bytes: episode.bytes,
+            mediaInfo: episode.mediaInfo,
+            encodingRequired: episode.encodingRequired,
+            precedence: episode.precedence,
+            author: episode.author,
+            creationTime: episode.creationTime,
+            _id: episode._id,
+            playback: VideoPlayback(
+                embed_url: episode.playback?.embed_url,
+                hls_url: episode.playback?.hls_url
+            )
+        )
     }
 }
 
@@ -457,66 +489,37 @@ struct CompactCategoryCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 15) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(
-                            LinearGradient(
-                                colors: [category.color, category.color.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [category.color, category.color.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .frame(width: 280, height: 160)
-                    
-                    VStack(spacing: 12) {
-                        getCategoryIcon(for: category.name)
-                            .font(.system(size: 32, weight: .medium))
-                            .foregroundColor(.white)
-                        
-                        Text(category.name)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                        
-                        Text("\(category.videos.count) videos")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.9))
-                    }
-                    .padding(20)
-                    
-                    if isFocused {
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white, lineWidth: 3)
-                            .frame(width: 280, height: 160)
-                    }
-                }
-                .scaleEffect(isFocused ? 1.05 : 1.0)
-                .shadow(color: isFocused ? .white.opacity(0.3) : .black.opacity(0.2), radius: 8)
+                    )
+                    .frame(width: 280, height: 158)
+                    .overlay(
+                        VStack {
+                            Text(category.name)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                            
+                            Text("\(category.videos.count) videos")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    )
+                    .cornerRadius(8)
+                    .scaleEffect(isFocused ? 1.05 : 1.0)
+                
+                Text(category.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
             }
         }
         .buttonStyle(PlainButtonStyle())
         .focused($isFocused)
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
-    }
-    
-    private func getCategoryIcon(for categoryName: String) -> Image {
-        switch categoryName {
-        case "Biblical Teaching":
-            return Image(systemName: "book.closed")
-        case "Inspirational & Testimony":
-            return Image(systemName: "heart.circle.fill")
-        case "Ministries & Churches":
-            return Image(systemName: "building.2.crop.circle")
-        case "Faith & Worship":
-            return Image(systemName: "hands.sparkles.fill")
-        case "Biblical Studies":
-            return Image(systemName: "text.book.closed")
-        case "Series & Shows":
-            return Image(systemName: "tv.circle")
-        default:
-            return Image(systemName: "folder.circle")
-        }
+        .animation(.easeInOut(duration: 0.1), value: isFocused)
     }
 }
 

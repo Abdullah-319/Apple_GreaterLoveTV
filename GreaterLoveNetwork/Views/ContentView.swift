@@ -37,10 +37,12 @@ struct ContentView: View {
                                     .environmentObject(progressManager)
                             case "ABOUT US":
                                 AboutView()
-                            case "ALL CATEGORIES":
-                                CategoriesView()
+                            case "ALL SHOWS":
+                                ShowsView()
                                     .environmentObject(apiService)
                                     .environmentObject(progressManager)
+                            case "INFO":
+                                QRCodesView()
                             default:
                                 HomeView()
                                     .environmentObject(apiService)

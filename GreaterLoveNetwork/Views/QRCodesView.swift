@@ -78,7 +78,7 @@ struct QRCodeCard: View {
         VStack(spacing: 20) {
             Rectangle()
                 .fill(Color.white)
-                .frame(width: 300, height: 300)
+                .frame(width: 250, height: 250)
                 .overlay(
                     Image(imageName)
                         .resizable()
