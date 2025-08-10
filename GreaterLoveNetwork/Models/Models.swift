@@ -300,6 +300,10 @@ enum ThumbnailState: Equatable {
     }
 }
 
+// MARK: - Backward Compatibility Types
+
+
+
 // MARK: - DateFormatter Extension
 extension DateFormatter {
     static let episodeDate: DateFormatter = {

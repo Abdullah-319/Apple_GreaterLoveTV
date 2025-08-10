@@ -373,7 +373,7 @@ class CastrAPIService: ObservableObject {
                 if let cgImage = cgImage {
                     let thumbnail = UIImage(cgImage: cgImage)
                     DispatchQueue.main.async {
-                        self?.thumbnailStates[episode._id] = .loaded(thumbnail)
+                     		   self?.thumbnailStates[episode._id] =	 .loaded(thumbnail)
                     }
                 } else {
                     DispatchQueue.main.async {
@@ -382,7 +382,7 @@ class CastrAPIService: ObservableObject {
                 }
             }
         }
-    }
+    }			
     
     private func generateThumbnailFromMP4(_ mp4URL: String, for episode: Episode) {
         guard let url = URL(string: mp4URL) else {

@@ -9,6 +9,7 @@ struct ShowDetailView: View {
     @StateObject private var progressManager = WatchProgressManager.shared
     @State private var sortOrder: EpisodeSortOrder = .newest
     @State private var showSortOptions = false
+    @State private var hasAppeared = false
     
     enum EpisodeSortOrder: String, CaseIterable {
         case newest = "Newest First"
@@ -81,6 +82,17 @@ struct ShowDetailView: View {
         }
         .background(Color.black)
         .ignoresSafeArea(.all)
+        .onAppear {
+            if !hasAppeared {
+                hasAppeared = true
+                // Ensure thumbnail loading for episodes
+                for episode in show.episodes {
+                    if apiService.thumbnailStates[episode._id] == nil {
+                        apiService.loadThumbnail(for: episode)
+                    }
+                }
+            }
+        }
     }
     
     private var showDetailHeader: some View {

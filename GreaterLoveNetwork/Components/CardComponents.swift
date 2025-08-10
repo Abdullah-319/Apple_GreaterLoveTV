@@ -312,41 +312,59 @@ struct LiveStreamCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 25) {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.2, green: 0.4, blue: 0.8),
-                                Color(red: 0.1, green: 0.3, blue: 0.6)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                ZStack {
+                    // Use live_bg.png background image
+                    Image("live_bg")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 440, height: 248)
+                        .clipped()
+                        .overlay(
+                            // Dark overlay for text readability
+                            LinearGradient(
+                                colors: [
+                                    Color.black.opacity(0.6),
+                                    Color.black.opacity(0.4),
+                                    Color.black.opacity(0.7)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 440, height: 248)
-                    .overlay(
-                        VStack(spacing: 10) {
-                            Text("GREATER LOVE TV")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.white)
+                        .cornerRadius(12)
+                    
+                    // Content overlay
+                    VStack(spacing: 10) {
+                        Text("GREATER LOVE TV")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.8), radius: 2, x: 1, y: 1)
+                        
+                        Text(number)
+                            .font(.system(size: 96, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.8), radius: 4, x: 2, y: 2)
+                        
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(stream.broadcasting_status == "online" ? Color.green : Color.red)
+                                .frame(width: 8, height: 8)
                             
-                            Text(number)
-                                .font(.system(size: 96, weight: .bold))
+                            Text(stream.broadcasting_status?.uppercased() ?? "OFFLINE")
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.white)
-                            
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(stream.broadcasting_status == "online" ? Color.green : Color.red)
-                                    .frame(width: 8, height: 8)
-                                
-                                Text(stream.broadcasting_status?.uppercased() ?? "OFFLINE")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
+                                .shadow(color: .black.opacity(0.8), radius: 1, x: 1, y: 1)
                         }
-                    )
-                    .cornerRadius(12)
-                    .scaleEffect(isFocused ? 1.05 : 1.0)
+                    }
+                    
+                    // Focus indicator
+                    if isFocused {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white, lineWidth: 4)
+                            .frame(width: 440, height: 248)
+                    }
+                }
+                .scaleEffect(isFocused ? 1.05 : 1.0)
                 
                 VStack(spacing: 5) {
                     Text(subtitle)

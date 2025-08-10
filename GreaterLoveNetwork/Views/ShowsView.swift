@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Shows View (replaces CategoriesView)
+// MARK: - Shows View (Only Shows, No Categories)
 struct ShowsView: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -22,11 +22,8 @@ struct ShowsView: View {
                         continueWatchingSection
                     }
                     
-                    // Featured Shows
-                    featuredShowsSection
-                    
-                    // Shows by Category
-                    showsByCategorySection
+                    // All Shows Grid
+                    allShowsGridSection
                 }
                 .padding(.horizontal, 60)
                 .padding(.bottom, 100)
@@ -175,53 +172,7 @@ struct ShowsView: View {
         }
     }
     
-    private var featuredShowsSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "star.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.yellow)
-                    
-                    Text("Featured Shows")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                Text("Most active shows")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 30) {
-                    if apiService.isLoading || apiService.shows.isEmpty {
-                        ForEach(0..<6, id: \.self) { index in
-                            LoadingShowCard(color: ShowCategory.allCases[index % ShowCategory.allCases.count].color)
-                        }
-                    } else {
-                        // Show top 6 shows with most episodes
-                        let featuredShows = apiService.shows
-                            .sorted { $0.episodeCount > $1.episodeCount }
-                            .prefix(6)
-                        
-                        ForEach(Array(featuredShows)) { show in
-                            FeaturedShowCard(show: show) {
-                                selectedShow = show
-                                showingShowDetail = true
-                            }
-                            .environmentObject(apiService)
-                        }
-                    }
-                }
-                .padding(.horizontal, 40)
-            }
-        }
-    }
-    
-    private var showsByCategorySection: some View {
+    private var allShowsGridSection: some View {
         VStack(alignment: .leading, spacing: 50) {
             HStack {
                 HStack(spacing: 12) {
@@ -229,43 +180,40 @@ struct ShowsView: View {
                         .font(.system(size: 24))
                         .foregroundColor(.blue)
                     
-                    Text("Browse by Category")
+                    Text("All Shows")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
                 }
                 
                 Spacer()
                 
-                Text("Organized by content type")
+                Text("Browse all available shows")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
             }
             
-            if apiService.isLoading || apiService.showCollections.isEmpty {
-                // Loading State
+            if apiService.isLoading || apiService.shows.isEmpty {
+                // Loading State - Grid of 9 loading cards
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40)
                 ], spacing: 40) {
                     ForEach(0..<9, id: \.self) { index in
-                        LoadingShowCategoryCard(index: index)
+                        LoadingShowGridCard(index: index)
                     }
                 }
             } else {
-                // Shows by Category
+                // All Shows Grid - 3 columns
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40)
                 ], spacing: 40) {
-                    ForEach(apiService.showCollections) { collection in
-                        ShowCategoryCard(collection: collection) {
-                            // Show category detail or first show
-                            if let firstShow = collection.shows.first {
-                                selectedShow = firstShow
-                                showingShowDetail = true
-                            }
+                    ForEach(apiService.shows.sorted { $0.episodeCount > $1.episodeCount }) { show in
+                        ShowGridCard(show: show) {
+                            selectedShow = show
+                            showingShowDetail = true
                         }
                     }
                 }
@@ -299,129 +247,24 @@ struct ShowsView: View {
     }
 }
 
-// MARK: - Featured Show Card
-struct FeaturedShowCard: View {
+// MARK: - Show Grid Card Component
+struct ShowGridCard: View {
     let show: Show
     let action: () -> Void
-    @EnvironmentObject var apiService: CastrAPIService
     @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 20) {
                 ZStack {
-                    // Show thumbnail or gradient background
+                    // Show background with category color
                     RoundedRectangle(cornerRadius: 20)
                         .fill(
                             LinearGradient(
                                 colors: [
                                     show.showCategory.color.opacity(0.9),
-                                    show.showCategory.color.opacity(0.6),
+                                    show.showCategory.color.opacity(0.7),
                                     show.showCategory.color.opacity(0.8)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 380, height: 220)
-                        .overlay(
-                            VStack(spacing: 16) {
-                                // Show icon
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.white.opacity(0.2))
-                                        .frame(width: 70, height: 70)
-                                    
-                                    Image(systemName: show.showCategory.icon)
-                                        .font(.system(size: 32, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                                
-                                VStack(spacing: 8) {
-                                    Text(show.displayName)
-                                        .font(.system(size: 24, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-                                    
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "tv.fill")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.white.opacity(0.9))
-                                        
-                                        Text("\(show.episodeCount) episodes")
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.9))
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 8)
-                                    .background(Color.black.opacity(0.3))
-                                    .cornerRadius(16)
-                                }
-                            }
-                            .padding(24)
-                        )
-                    
-                    // Focus indicator
-                    if isFocused {
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color.white, Color.white.opacity(0.8)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 4
-                            )
-                            .frame(width: 380, height: 220)
-                    }
-                }
-                .scaleEffect(isFocused ? 1.05 : 1.0)
-                .shadow(
-                    color: isFocused ? .white.opacity(0.4) : .black.opacity(0.3),
-                    radius: isFocused ? 12 : 6,
-                    x: 0,
-                    y: isFocused ? 8 : 4
-                )
-                
-                // Show info
-                VStack(spacing: 8) {
-                    Text(show.displayName)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    
-                    Text(show.showCategory.rawValue)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
-        .animation(.easeInOut(duration: 0.25), value: isFocused)
-    }
-}
-
-// MARK: - Show Category Card
-struct ShowCategoryCard: View {
-    let collection: ShowCollection
-    let action: () -> Void
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 20) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    collection.category.color.opacity(0.9),
-                                    collection.category.color.opacity(0.7),
-                                    collection.category.color.opacity(0.8)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -429,56 +272,68 @@ struct ShowCategoryCard: View {
                         )
                         .frame(width: 340, height: 200)
                         .overlay(
-                            VStack(spacing: 16) {
-                                // Category icon
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.white.opacity(0.2))
-                                        .frame(width: 60, height: 60)
-                                    
-                                    Image(systemName: collection.category.icon)
-                                        .font(.system(size: 28, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                                
-                                VStack(spacing: 8) {
-                                    Text(collection.displayTitle)
-                                        .font(.system(size: 22, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-                                    
-                                    VStack(spacing: 4) {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: "tv.fill")
-                                                .font(.system(size: 14))
-                                                .foregroundColor(.white.opacity(0.9))
-                                            
-                                            Text("\(collection.showCount) shows")
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundColor(.white.opacity(0.9))
-                                        }
-                                        
-                                        HStack(spacing: 8) {
-                                            Image(systemName: "play.circle.fill")
-                                                .font(.system(size: 14))
-                                                .foregroundColor(.white.opacity(0.9))
-                                            
-                                            Text("\(collection.totalEpisodes) episodes")
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundColor(.white.opacity(0.9))
-                                        }
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 6)
-                                    .background(Color.black.opacity(0.2))
-                                    .cornerRadius(12)
-                                }
-                            }
-                            .padding(24)
+                            // Subtle pattern overlay
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(
+                                    RadialGradient(
+                                        colors: [
+                                            Color.white.opacity(0.1),
+                                            Color.clear
+                                        ],
+                                        center: .topLeading,
+                                        startRadius: 0,
+                                        endRadius: 150
+                                    )
+                                )
                         )
                     
+                    // Content overlay
+                    VStack(spacing: 16) {
+                        // Show icon with background
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.2))
+                                .frame(width: 60, height: 60)
+                            
+                            Image(systemName: show.showCategory.icon)
+                                .font(.system(size: 28, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(spacing: 8) {
+                            // Show title
+                            Text(show.displayName)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                            
+                            // Episode count and category
+                            VStack(spacing: 4) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "tv.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white.opacity(0.9))
+                                    
+                                    Text("\(show.episodeCount) episodes")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.9))
+                                }
+                                
+                                Text(show.showCategory.rawValue)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(Color.black.opacity(0.2))
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                    .padding(24)
+                    
+                    // Enhanced focus indicator
                     if isFocused {
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(
@@ -499,6 +354,19 @@ struct ShowCategoryCard: View {
                     x: 0,
                     y: isFocused ? 8 : 4
                 )
+                
+                // Show info below card
+                VStack(spacing: 8) {
+                    Text(show.displayName)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    Text("\(show.episodeCount) episodes")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                }
             }
         }
         .buttonStyle(PlainButtonStyle())
@@ -507,8 +375,8 @@ struct ShowCategoryCard: View {
     }
 }
 
-// MARK: - Loading Show Category Card
-struct LoadingShowCategoryCard: View {
+// MARK: - Loading Show Grid Card
+struct LoadingShowGridCard: View {
     let index: Int
     @State private var isAnimating = false
     
@@ -557,6 +425,17 @@ struct LoadingShowCategoryCard: View {
                 )
                 .scaleEffect(isAnimating ? 1.02 : 1.0)
                 .opacity(isAnimating ? 0.8 : 1.0)
+            
+            // Loading text below
+            VStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 120, height: 16)
+                
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 80, height: 14)
+            }
         }
         .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAnimating)
         .onAppear {

@@ -126,15 +126,15 @@ struct AboutView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 80)
             
-            HStack(spacing: 20) {
-                Image("about_us_bottom_left").resizable().aspectRatio(contentMode: .fill)
-                Image("about_us_bottom_right").resizable().aspectRatio(contentMode: .fill)
-            }
-            .frame(width: 420, height: 350)
-            .cornerRadius(12)
-            .clipped()
-            .padding(.trailing, 80)
-            .padding(.top, 80)
+            // Single image instead of two side-by-side images
+            Image("about_us_bottom")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 420, height: 350)
+                .cornerRadius(12)
+                .clipped()
+                .padding(.trailing, 80)
+                .padding(.top, 80)
         }
         .padding(.bottom, 100)
     }

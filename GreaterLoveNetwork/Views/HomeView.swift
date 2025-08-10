@@ -6,6 +6,8 @@ struct HomeView: View {
     @StateObject private var progressManager = WatchProgressManager.shared
     @State private var selectedContent: Any?
     @State private var showingVideoPlayer = false
+    @State private var selectedShow: Show?
+    @State private var showingShowDetail = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -18,17 +20,8 @@ struct HomeView: View {
                         continueWatchingSection
                     }
                     
-                    // Recently Added Videos
-                    recentVideosSection
-                    
-                    // Featured Categories (Top 5 most populated categories)
-                    featuredCategoriesSection
-                    
-                    // Quick Access Categories
-                    quickAccessSection
-                    
-                    // Shows & Series
-                    showsSection
+                    // Featured Shows & Series (Ministers)
+                    featuredShowsSection
                     
                     // Live Streams
                     liveStreamsSection
@@ -47,6 +40,16 @@ struct HomeView: View {
                 VideoDataPlayerView(videoData: videoData)
             }
         }
+        .sheet(isPresented: $showingShowDetail) {
+            if let show = selectedShow {
+                ShowDetailView(show: show) { episode in
+                    selectedContent = episode
+                    showingShowDetail = false
+                    showingVideoPlayer = true
+                }
+                .environmentObject(apiService)
+            }
+        }
         .onAppear {
             // Refresh progress manager when view appears
             progressManager.objectWillChange.send()
@@ -62,20 +65,22 @@ struct HomeView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 20) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("STREAM YOUR")
+                            Text("MEET OUR")
                                 .font(.custom("Poppins-Bold", size: 72))
                                 .foregroundColor(.white)
                                 .kerning(-2)
                             
-                            Text("FAVORITE")
+                            Text("INSPIRING")
                                 .font(.custom("Poppins-Bold", size: 72))
                                 .foregroundColor(.white)
                                 .kerning(-2)
+                                .padding(.top, -10)
                             
-                            Text("BIBLE TEACHERS")
+                            Text("MINISTERS")
                                 .font(.custom("Poppins-Bold", size: 72))
                                 .foregroundColor(.white)
                                 .kerning(-2)
+                                .padding(.top, -10)
                         }
                         
                         Text("IN ONE PLACE")
@@ -108,9 +113,9 @@ struct HomeView: View {
                    let episode = findEpisode(by: firstVideo.videoId) {
                     selectedContent = episode
                     showingVideoPlayer = true
-                } else if let recentEpisode = apiService.allEpisodes.first {
-                    selectedContent = recentEpisode
-                    showingVideoPlayer = true
+                } else if let firstShow = apiService.shows.first {
+                    selectedShow = firstShow
+                    showingShowDetail = true
                 }
             }
         }
@@ -169,167 +174,7 @@ struct HomeView: View {
         }
     }
     
-    private var recentVideosSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "calendar.badge.plus")
-                        .font(.system(size: 24))
-                        .foregroundColor(.purple)
-                    
-                    Text(progressManager.getContinueWatchingVideos().isEmpty ? "Recent Videos" : "More Recent Videos")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                Text("Latest uploads")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 30) {
-                    if apiService.isLoading || apiService.allEpisodes.isEmpty {
-                        ForEach(0..<5, id: \.self) { _ in
-                            LoadingCard()
-                        }
-                    } else {
-                        // Filter out episodes that are already in continue watching
-                        let continueWatchingIds = Set(progressManager.getContinueWatchingVideos().map { $0.videoId })
-                        let filteredEpisodes = getRecentEpisodes().filter { !continueWatchingIds.contains($0._id) }
-                        
-                        ForEach(Array(filteredEpisodes.prefix(10))) { episode in
-                            VideoDataCard(videoData: convertEpisodeToVideoData(episode)) {
-                                selectedContent = episode
-                                showingVideoPlayer = true
-                            }
-                            .environmentObject(apiService)
-                        }
-                    }
-                }
-                .padding(.horizontal, 40)
-            }
-        }
-    }
-    
-    private var featuredCategoriesSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "star.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.yellow)
-                    
-                    Text("Featured Categories")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                Text("Most popular content")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 30) {
-                    if apiService.isLoading || apiService.categories.isEmpty {
-                        ForEach(0..<4, id: \.self) { index in
-                            LoadingCategoryCard()
-                        }
-                    } else {
-                        // Show top 5 categories with most videos
-                        let featuredCategories = apiService.categories
-                            .filter { $0.name != "All Videos" }
-                            .sorted { $0.videos.count > $1.videos.count }
-                            .prefix(5)
-                        
-                        ForEach(Array(featuredCategories)) { category in
-                            CompactCategoryCard(category: category) {
-                                // Navigate to category or show first video
-                                if let firstVideo = category.videos.first {
-                                    selectedContent = firstVideo
-                                    showingVideoPlayer = true
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 40)
-            }
-        }
-    }
-    
-    private var quickAccessSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "bolt.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.blue)
-                    
-                    Text("Quick Access")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                Text("Jump right in")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
-            // Quick access buttons for specific categories
-            HStack(spacing: 20) {
-                QuickAccessButton(
-                    title: "Biblical Teaching",
-                    icon: "book.circle.fill",
-                    color: .orange,
-                    action: {
-                        if let teachingCategory = apiService.categories.first(where: { $0.name == "Biblical Teaching" }),
-                           let firstVideo = teachingCategory.videos.first {
-                            selectedContent = firstVideo
-                            showingVideoPlayer = true
-                        }
-                    }
-                )
-                
-                QuickAccessButton(
-                    title: "Testimonies",
-                    icon: "heart.circle.fill",
-                    color: .pink,
-                    action: {
-                        if let testimonyCategory = apiService.categories.first(where: { $0.name == "Inspirational & Testimony" }),
-                           let firstVideo = testimonyCategory.videos.first {
-                            selectedContent = firstVideo
-                            showingVideoPlayer = true
-                        }
-                    }
-                )
-                
-                QuickAccessButton(
-                    title: "Worship",
-                    icon: "hands.sparkles",
-                    color: .purple,
-                    action: {
-                        if let worshipCategory = apiService.categories.first(where: { $0.name == "Faith & Worship" }),
-                           let firstVideo = worshipCategory.videos.first {
-                            selectedContent = firstVideo
-                            showingVideoPlayer = true
-                        }
-                    }
-                )
-                
-                Spacer()
-            }
-        }
-    }
-    
-    private var showsSection: some View {
+    private var featuredShowsSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             HStack {
                 HStack(spacing: 12) {
@@ -337,37 +182,38 @@ struct HomeView: View {
                         .font(.system(size: 24))
                         .foregroundColor(.cyan)
                     
-                    Text("Shows & Series")
+                    Text("Featured Ministers")
                         .font(.custom("Poppins-Medium", size: 24))
                         .foregroundColor(.white)
                 }
                 
                 Spacer()
                 
-                Text("Episode-based content")
+                Text("Most active shows")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 50) {
-                    if apiService.isLoading || apiService.allEpisodes.isEmpty {
+                    if apiService.isLoading || apiService.shows.isEmpty {
                         ForEach(0..<6, id: \.self) { index in
                             LoadingShowCard(color: getLoadingColors()[index])
                         }
                     } else {
-                        // Get series and episodic content from Episodes
-                        let seriesEpisodes: [Episode] = getSeriesEpisodes()
-                        let episodesToShow: [Episode] = seriesEpisodes.isEmpty ? Array(apiService.allEpisodes.prefix(6)) : Array(seriesEpisodes.prefix(6))
+                        // Show top 6 shows with most episodes
+                        let featuredShows = apiService.shows
+                            .sorted { $0.episodeCount > $1.episodeCount }
+                            .prefix(6)
                         
-                        ForEach(Array(episodesToShow.enumerated()), id: \.element.id) { index, episode in
+                        ForEach(Array(featuredShows.enumerated()), id: \.element.id) { index, show in
                             let colors: [Color] = getShowColors()
                             ShowCircleCard(
-                                videoData: convertEpisodeToVideoData(episode),
+                                videoData: convertEpisodeToVideoData(show.latestEpisode ?? show.episodes.first!),
                                 color: colors[index % colors.count]
                             ) {
-                                selectedContent = episode
-                                showingVideoPlayer = true
+                                selectedShow = show
+                                showingShowDetail = true
                             }
                             .environmentObject(apiService)
                         }
@@ -435,22 +281,6 @@ struct HomeView: View {
         return apiService.allEpisodes.first { $0._id == episodeId }
     }
     
-    private func getRecentEpisodes() -> [Episode] {
-        return apiService.allEpisodes.sorted { episode1, episode2 in
-            let dateFormatter = ISO8601DateFormatter()
-            let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
-            let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
-            return date1 > date2
-        }
-    }
-    
-    private func getSeriesEpisodes() -> [Episode] {
-        return apiService.allEpisodes.filter { episode in
-            let fileName = episode.fileName.lowercased()
-            return fileName.contains("ep") || fileName.contains("part") || fileName.contains("series")
-        }
-    }
-    
     private func getLoadingColors() -> [Color] {
         return [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan]
     }
@@ -480,90 +310,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Compact Category Card for Home View
-struct CompactCategoryCard: View {
-    let category: Category
-    let action: () -> Void
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 15) {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [category.color, category.color.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 280, height: 158)
-                    .overlay(
-                        VStack {
-                            Text(category.name)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                            
-                            Text("\(category.videos.count) videos")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    )
-                    .cornerRadius(8)
-                    .scaleEffect(isFocused ? 1.05 : 1.0)
-                
-                Text(category.name)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
-        .animation(.easeInOut(duration: 0.1), value: isFocused)
-    }
-}
-
-// MARK: - Quick Access Button
-struct QuickAccessButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.white)
-                
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [color, color.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            .shadow(color: isFocused ? color.opacity(0.4) : .black.opacity(0.2), radius: 8)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
-    }
-}
-
-// MARK: - Enhanced Live Stream Card
+// MARK: - Enhanced Live Stream Card with Background Image
 struct EnhancedLiveStreamCard: View {
     let stream: LiveStream
     let number: String
@@ -576,71 +323,50 @@ struct EnhancedLiveStreamCard: View {
         Button(action: action) {
             VStack(spacing: 25) {
                 ZStack {
-                    Rectangle()
-                        .fill(
+                    // Background image
+                    Image("live_bg")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 440, height: 248)
+                        .clipped()
+                        .overlay(
+                            // Dark overlay for text readability
                             LinearGradient(
                                 colors: [
-                                    Color(red: 0.1, green: 0.3, blue: 0.7),
-                                    Color(red: 0.2, green: 0.4, blue: 0.8),
-                                    Color(red: 0.1, green: 0.2, blue: 0.6)
+                                    Color.black.opacity(0.6),
+                                    Color.black.opacity(0.4),
+                                    Color.black.opacity(0.7)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 440, height: 248)
-                        .overlay(
-                            // Subtle animated background pattern
-                            GeometryReader { geometry in
-                                ForEach(0..<20, id: \.self) { index in
-                                    Circle()
-                                        .fill(Color.white.opacity(0.05))
-                                        .frame(width: 40, height: 40)
-                                        .position(
-                                            x: CGFloat.random(in: 0...geometry.size.width),
-                                            y: CGFloat.random(in: 0...geometry.size.height)
-                                        )
-                                        .animation(.linear(duration: Double.random(in: 10...20)).repeatForever(autoreverses: false), value: isLivePulsing)
-                                }
-                            }
-                        )
-                        .overlay(
-                            VStack(spacing: 16) {
-                                Text("GREATER LOVE TV")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .shadow(color: .black.opacity(0.5), radius: 2, x: 1, y: 1)
-                                
-                                Text(number)
-                                    .font(.system(size: 96, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .shadow(color: .black.opacity(0.5), radius: 4, x: 2, y: 2)
-                                
-                                HStack(spacing: 12) {
-                                    Circle()
-                                        .fill(stream.broadcasting_status == "online" ? Color.red : Color.gray)
-                                        .frame(width: 12, height: 12)
-                                        .scaleEffect(stream.broadcasting_status == "online" && isLivePulsing ? 1.3 : 1.0)
-                                    
-                                    Text(stream.broadcasting_status?.uppercased() ?? "OFFLINE")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .shadow(color: .black.opacity(0.5), radius: 1, x: 1, y: 1)
-                                }
-                            }
-                        )
                         .cornerRadius(16)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [Color.white.opacity(0.3), Color.clear],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        )
+                    
+                    // Content overlay
+                    VStack(spacing: 16) {
+                        Text("GREATER LOVE TV")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.8), radius: 2, x: 1, y: 1)
+                        
+                        Text(number)
+                            .font(.system(size: 96, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.8), radius: 4, x: 2, y: 2)
+                        
+                        HStack(spacing: 12) {
+                            Circle()
+                                .fill(stream.broadcasting_status == "online" ? Color.red : Color.gray)
+                                .frame(width: 12, height: 12)
+                                .scaleEffect(stream.broadcasting_status == "online" && isLivePulsing ? 1.3 : 1.0)
+                            
+                            Text(stream.broadcasting_status?.uppercased() ?? "OFFLINE")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.8), radius: 1, x: 1, y: 1)
+                        }
+                    }
                     
                     // Focus indicator
                     if isFocused {

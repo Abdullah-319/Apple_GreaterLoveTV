@@ -18,6 +18,7 @@ struct VideoDataPlayerView: View {
     @State private var hasResumedFromProgress = false
     @State private var showResumePrompt = false
     @State private var savedProgress: WatchProgress?
+    @State private var hasAppeared = false
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -38,13 +39,17 @@ struct VideoDataPlayerView: View {
             }
         }
         .onAppear {
-            checkForSavedProgress()
-            loadVideoURL()
-            startControlsTimer()
+            if !hasAppeared {
+                hasAppeared = true
+                checkForSavedProgress()
+                loadVideoURL()
+                startControlsTimer()
+            }
         }
         .onDisappear {
             saveCurrentProgress()
             controlsTimer?.invalidate()
+            cleanupPlayer()
         }
     }
     
@@ -89,6 +94,10 @@ struct VideoDataPlayerView: View {
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 60)
+            
+            CTAButton(title: "Back") {
+                presentationMode.wrappedValue.dismiss()
+            }
         }
     }
     
@@ -99,10 +108,9 @@ struct VideoDataPlayerView: View {
                     toggleControlsVisibility()
                 }
                 .onAppear {
-                    setupPlayer(with: url)
-                }
-                .onDisappear {
-                    cleanupPlayer()
+                    if player == nil {
+                        setupPlayer(with: url)
+                    }
                 }
             
             // Buffering Overlay
@@ -321,6 +329,7 @@ struct VideoDataPlayerView: View {
         if let player = player {
             let cmTime = CMTime(seconds: progress.currentTime, preferredTimescale: 1)
             player.seek(to: cmTime)
+            player.play()
         }
     }
     
@@ -334,6 +343,7 @@ struct VideoDataPlayerView: View {
         
         if let player = player {
             player.seek(to: .zero)
+            player.play()
         }
     }
     
@@ -352,64 +362,71 @@ struct VideoDataPlayerView: View {
     // MARK: - Player Setup and Management
     
     private func setupPlayer(with url: URL) {
+        guard player == nil else { return }
+        
         let playerItem = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: playerItem)
         
-        // Setup buffering observation
-        NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemPlaybackStalled,
-            object: playerItem,
-            queue: .main
-        ) { _ in
-            isBuffering = true
-        }
-        
-        // Setup time observation
-        playerTimeObserver = player?.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
-            queue: .main
-        ) { time in
-            DispatchQueue.main.async {
-                guard let player = self.player else { return }
-                
-                self.currentTime = time.seconds
-                if let duration = player.currentItem?.duration.seconds, !duration.isNaN {
-                    self.duration = duration
+        // Ensure player is ready before proceeding
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Setup buffering observation
+            NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemPlaybackStalled,
+                object: playerItem,
+                queue: .main
+            ) { _ in
+                self.isBuffering = true
+            }
+            
+            // Setup time observation
+            self.playerTimeObserver = self.player?.addPeriodicTimeObserver(
+                forInterval: CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
+                queue: .main
+            ) { time in
+                DispatchQueue.main.async {
+                    guard let player = self.player else { return }
                     
-                    // Auto-resume if we have saved progress and haven't resumed yet
-                    if !self.hasResumedFromProgress, let progress = self.savedProgress, !self.showResumePrompt {
-                        let cmTime = CMTime(seconds: progress.currentTime, preferredTimescale: 1)
-                        player.seek(to: cmTime)
-                        self.hasResumedFromProgress = true
+                    self.currentTime = time.seconds
+                    if let duration = player.currentItem?.duration.seconds, !duration.isNaN {
+                        self.duration = duration
+                        
+                        // Auto-resume if we have saved progress and haven't resumed yet
+                        if !self.hasResumedFromProgress, let progress = self.savedProgress, !self.showResumePrompt {
+                            let cmTime = CMTime(seconds: progress.currentTime, preferredTimescale: 1)
+                            player.seek(to: cmTime)
+                            self.hasResumedFromProgress = true
+                        }
                     }
-                }
-                
-                // Update playing state
-                self.isPlaying = player.rate > 0
-                
-                // Update buffering state
-                if let item = player.currentItem {
-                    if item.status == .readyToPlay && item.isPlaybackLikelyToKeepUp {
-                        self.isBuffering = false
-                    } else if item.status == .readyToPlay && !item.isPlaybackLikelyToKeepUp {
-                        self.isBuffering = true
+                    
+                    // Update playing state
+                    self.isPlaying = player.rate > 0
+                    
+                    // Update buffering state
+                    if let item = player.currentItem {
+                        if item.status == .readyToPlay && item.isPlaybackLikelyToKeepUp {
+                            self.isBuffering = false
+                        } else if item.status == .readyToPlay && !item.isPlaybackLikelyToKeepUp {
+                            self.isBuffering = true
+                        }
                     }
-                }
-                
-                // Save progress every 5 seconds while playing
-                if self.isPlaying && Int(self.currentTime) % 5 == 0 {
-                    self.saveCurrentProgress()
+                    
+                    // Save progress every 5 seconds while playing
+                    if self.isPlaying && Int(self.currentTime) % 5 == 0 {
+                        self.saveCurrentProgress()
+                    }
                 }
             }
-        }
-        
-        // Don't auto-play if we're showing resume prompt
-        if !showResumePrompt {
-            player?.play()
+            
+            // Don't auto-play if we're showing resume prompt
+            if !self.showResumePrompt {
+                self.player?.play()
+            }
         }
     }
     
     private func cleanupPlayer() {
+        guard player != nil else { return }
+        
         saveCurrentProgress()
         player?.pause()
         controlsTimer?.invalidate()
@@ -428,7 +445,9 @@ struct VideoDataPlayerView: View {
     
     private func loadVideoURL() {
         guard let embedURL = videoData.playback?.embed_url else {
-            isLoadingVideo = false
+            DispatchQueue.main.async {
+                self.isLoadingVideo = false
+            }
             return
         }
         
@@ -437,7 +456,9 @@ struct VideoDataPlayerView: View {
     
     private func extractVideoURLFromEmbed(_ embedURL: String) {
         guard let url = URL(string: embedURL) else {
-            isLoadingVideo = false
+            DispatchQueue.main.async {
+                self.isLoadingVideo = false
+            }
             return
         }
         
