@@ -10,30 +10,12 @@ struct QRCodesView: View {
             
             ScrollView {
                 VStack(spacing: 60) {
-                    // Header
-                    VStack(spacing: 20) {
-                        HStack {
-                            CTAButton(title: "Back") {
-                                presentationMode.wrappedValue.dismiss()
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 80)
-                        .padding(.top, 40)
-                        
-                        Text("GREATERLOVE")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.white)
-                            .kerning(2)
-                        
-                        Text("NETWORK")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white)
-                            .kerning(1.5)
+                    // Header - No Back button
+                    VStack(spacing: 10) {
+                     
                     }
                     
-                    // QR Codes Grid
+                    // QR Codes Grid - Non-focusable
                     LazyVGrid(columns: [
                         GridItem(.flexible(), spacing: 60),
                         GridItem(.flexible(), spacing: 60)
@@ -68,11 +50,10 @@ struct QRCodesView: View {
     }
 }
 
-// MARK: - QR Code Card
+// MARK: - QR Code Card - Non-focusable
 struct QRCodeCard: View {
     let title: String
     let imageName: String
-    @FocusState private var isFocused: Bool
     
     var body: some View {
         VStack(spacing: 20) {
@@ -86,16 +67,13 @@ struct QRCodeCard: View {
                         .frame(width: 280, height: 280)
                 )
                 .cornerRadius(16)
-                .scaleEffect(isFocused ? 1.05 : 1.0)
-                .shadow(color: .white.opacity(isFocused ? 0.3 : 0.1), radius: isFocused ? 10 : 5)
+                .shadow(color: .white.opacity(0.1), radius: 5)
             
             Text(title)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
         }
-        .focusable()
-        .focused($isFocused)
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
+        // Removed .focusable() and @FocusState to make it non-interactive
     }
 }

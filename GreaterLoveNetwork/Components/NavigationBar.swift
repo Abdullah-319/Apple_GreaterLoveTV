@@ -1,10 +1,11 @@
 import SwiftUI
 
-// MARK: - Navigation Bar
+// MARK: - Navigation Bar with Enhanced Focus Management
 struct NavigationBar: View {
     @Binding var selectedItem: String
     
     private let navItems = ["HOME", "ABOUT US", "ALL SHOWS", "INFO"]
+    @FocusState var focusedItem: String?
     
     var body: some View {
         HStack {
@@ -25,10 +26,20 @@ struct NavigationBar: View {
                 ForEach(navItems, id: \.self) { item in
                     NavigationBarButton(
                         title: item,
-                        isSelected: selectedItem == item
+                        isSelected: selectedItem == item,
+                        isFocused: focusedItem == item
                     ) {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedItem = item
+                        }
+                    }
+                    .focused($focusedItem, equals: item)
+                    .onChange(of: focusedItem) { newFocusedItem in
+                        // Automatically navigate when focus changes
+                        if let newItem = newFocusedItem, newItem != selectedItem {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                selectedItem = newItem
+                            }
                         }
                     }
                 }
@@ -40,6 +51,12 @@ struct NavigationBar: View {
         .padding(.vertical, 25)
         .background(Color.black.opacity(0.95))
         .zIndex(1)
+        .onAppear {
+            // Set initial focus to the selected item
+            if focusedItem == nil {
+                focusedItem = selectedItem
+            }
+        }
     }
 }
 
@@ -47,8 +64,8 @@ struct NavigationBar: View {
 struct NavigationBarButton: View {
     let title: String
     let isSelected: Bool
+    let isFocused: Bool
     let action: () -> Void
-    @FocusState private var isFocused: Bool
     
     var body: some View {
         Button(action: action) {
@@ -74,7 +91,6 @@ struct NavigationBarButton: View {
             .scaleEffect(isFocused ? 1.05 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
         .animation(.easeInOut(duration: 0.1), value: isFocused)
     }
 }

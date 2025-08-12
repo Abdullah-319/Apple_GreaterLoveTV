@@ -9,6 +9,16 @@ struct HomeView: View {
     @State private var selectedShow: Show?
     @State private var showingShowDetail = false
     
+    // Focus states for navigation
+    @FocusState private var focusedSection: FocusedSection?
+    
+    enum FocusedSection: Hashable {
+        case smartCTA
+        case continueWatching
+        case featuredShows
+        case liveStreams
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             headerSection()
@@ -53,6 +63,8 @@ struct HomeView: View {
         .onAppear {
             // Refresh progress manager when view appears
             progressManager.objectWillChange.send()
+            // Set initial focus to smart CTA
+            focusedSection = .smartCTA
         }
     }
     
@@ -106,7 +118,7 @@ struct HomeView: View {
         let hasWatchHistory = !progressManager.getContinueWatchingVideos().isEmpty
         let buttonTitle = hasWatchHistory ? "Continue Watching" : "Start Exploring"
         
-        return CTAButton(title: buttonTitle) {
+        return Button(action: {
             withAnimation(.easeInOut(duration: 0.5)) {
                 if hasWatchHistory,
                    let firstVideo = progressManager.getContinueWatchingVideos().first,
@@ -116,6 +128,33 @@ struct HomeView: View {
                 } else if let firstShow = apiService.shows.first {
                     selectedShow = firstShow
                     showingShowDetail = true
+                }
+            }
+        }) {
+            Text(buttonTitle)
+                .font(.custom("Poppins-SemiBold", size: 18))
+                .foregroundColor(.white)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(red: 0.9, green: 0.2, blue: 0.2))
+                )
+                .scaleEffect(focusedSection == .smartCTA ? 1.05 : 1.0)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .focused($focusedSection, equals: .smartCTA)
+        .animation(.easeInOut(duration: 0.1), value: focusedSection)
+        .onMoveCommand { direction in
+            // Handle navigation up to the navigation bar
+            if direction == .up {
+                // This will be handled by the ContentView
+            } else if direction == .down {
+                // Move focus to continue watching or next section
+                if !progressManager.getContinueWatchingVideos().isEmpty {
+                    focusedSection = .continueWatching
+                } else {
+                    focusedSection = .featuredShows
                 }
             }
         }
@@ -156,7 +195,7 @@ struct HomeView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 30) {
-                    ForEach(progressManager.getContinueWatchingVideos()) { progress in
+                    ForEach(Array(progressManager.getContinueWatchingVideos().enumerated()), id: \.element.id) { index, progress in
                         if let episode = findEpisode(by: progress.videoId) {
                             ContinueWatchingCard(
                                 videoData: convertEpisodeToVideoData(episode),
@@ -166,6 +205,7 @@ struct HomeView: View {
                                 showingVideoPlayer = true
                             }
                             .environmentObject(apiService)
+                            .focused($focusedSection, equals: .continueWatching)
                         }
                     }
                 }
@@ -201,21 +241,22 @@ struct HomeView: View {
                             LoadingShowCard(color: getLoadingColors()[index])
                         }
                     } else {
-                        // Show top 6 shows with most episodes
+                        // Show top 6 shows with most episodes - displaying show info instead of latest episode
                         let featuredShows = apiService.shows
                             .sorted { $0.episodeCount > $1.episodeCount }
                             .prefix(6)
                         
                         ForEach(Array(featuredShows.enumerated()), id: \.element.id) { index, show in
                             let colors: [Color] = getShowColors()
-                            ShowCircleCard(
-                                videoData: convertEpisodeToVideoData(show.latestEpisode ?? show.episodes.first!),
+                            ShowInfoCard(
+                                show: show,
                                 color: colors[index % colors.count]
                             ) {
                                 selectedShow = show
                                 showingShowDetail = true
                             }
                             .environmentObject(apiService)
+                            .focused($focusedSection, equals: .featuredShows)
                         }
                     }
                 }
@@ -261,11 +302,13 @@ struct HomeView: View {
                         EnhancedLiveStreamCard(
                             stream: stream,
                             number: "\(index + 1)",
-                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")"
+                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
+                            imageName: index == 0 ? "GL_live_1" : "GL_live_2"
                         ) {
                             selectedContent = stream
                             showingVideoPlayer = true
                         }
+                        .focused($focusedSection, equals: .liveStreams)
                     }
                 }
                 
@@ -310,11 +353,13 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Enhanced Live Stream Card with Background Image
+
+// MARK: - Enhanced Live Stream Card with Custom Background Image
 struct EnhancedLiveStreamCard: View {
     let stream: LiveStream
     let number: String
     let subtitle: String
+    let imageName: String
     let action: () -> Void
     @FocusState private var isFocused: Bool
     @State private var isLivePulsing = false
@@ -323,8 +368,8 @@ struct EnhancedLiveStreamCard: View {
         Button(action: action) {
             VStack(spacing: 25) {
                 ZStack {
-                    // Background image
-                    Image("live_bg")
+                    // Custom background image for each live stream
+                    Image(imageName)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 440, height: 248)

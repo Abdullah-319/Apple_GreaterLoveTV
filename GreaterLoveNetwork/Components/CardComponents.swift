@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Card Components
+// MARK: - Card Components with Enhanced Focus Management
 struct VideoDataCard: View {
     let videoData: VideoData
     let action: () -> Void
@@ -306,6 +306,7 @@ struct LiveStreamCard: View {
     let stream: LiveStream
     let number: String
     let subtitle: String
+    let imageName: String // Custom image name parameter
     let action: () -> Void
     @FocusState private var isFocused: Bool
     
@@ -313,47 +314,46 @@ struct LiveStreamCard: View {
         Button(action: action) {
             VStack(spacing: 25) {
                 ZStack {
-                    // Use live_bg.png background image
+                    // Background image (live_bg)
                     Image("live_bg")
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 440, height: 248)
                         .clipped()
-                        .overlay(
-                            // Dark overlay for text readability
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.6),
-                                    Color.black.opacity(0.4),
-                                    Color.black.opacity(0.7)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
                         .cornerRadius(12)
                     
-                    // Content overlay
-                    VStack(spacing: 10) {
-                        Text("GREATER LOVE TV")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.8), radius: 2, x: 1, y: 1)
-                        
-                        Text(number)
-                            .font(.system(size: 96, weight: .bold))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.8), radius: 4, x: 2, y: 2)
-                        
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(stream.broadcasting_status == "online" ? Color.green : Color.red)
-                                .frame(width: 8, height: 8)
+                    // Custom overlay image (GL_live_1 or GL_live_2)
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 360, height: 200)
+                        .clipped()
+                        .cornerRadius(8)
+                    
+                    // Status indicator in bottom right
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
                             
-                            Text(stream.broadcasting_status?.uppercased() ?? "OFFLINE")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.white)
-                                .shadow(color: .black.opacity(0.8), radius: 1, x: 1, y: 1)
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(stream.broadcasting_status == "online" ? Color.green : Color.red)
+                                    .frame(width: 12, height: 12)
+                                    .scaleEffect(stream.broadcasting_status == "online" ? 1.2 : 1.0)
+                                    .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: stream.broadcasting_status == "online")
+                                
+                                Text(stream.broadcasting_status?.uppercased() ?? "OFFLINE")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .shadow(color: .black.opacity(0.8), radius: 2, x: 1, y: 1)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.7))
+                            .cornerRadius(12)
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 16)
                         }
                     }
                     
@@ -365,6 +365,12 @@ struct LiveStreamCard: View {
                     }
                 }
                 .scaleEffect(isFocused ? 1.05 : 1.0)
+                .shadow(
+                    color: isFocused ? .white.opacity(0.4) : .black.opacity(0.3),
+                    radius: isFocused ? 12 : 6,
+                    x: 0,
+                    y: isFocused ? 8 : 4
+                )
                 
                 VStack(spacing: 5) {
                     Text(subtitle)
