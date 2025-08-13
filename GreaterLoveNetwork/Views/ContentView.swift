@@ -176,8 +176,8 @@ struct HomeViewWithNavigation: View {
     // Focus states for navigation - using individual focus states for each card/button
     @FocusState private var smartCTAFocused: Bool
     @FocusState private var continueWatchingFocused: Int?
-    @FocusState private var featuredShowsFocused: Int?
     @FocusState private var liveStreamsFocused: Int?
+    @FocusState private var featuredShowsFocused: Int?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -190,11 +190,11 @@ struct HomeViewWithNavigation: View {
                         continueWatchingSection
                     }
                     
+                    // Live Streams Section (MOVED BELOW CONTINUE WATCHING)
+                    liveStreamsSection
+                    
                     // Featured Shows & Series (Ministers)
                     featuredShowsSection
-                    
-                    // Live Streams
-                    liveStreamsSection
                 }
                 .padding(.horizontal, 80)
                 .padding(.bottom, 100)
@@ -238,8 +238,8 @@ struct HomeViewWithNavigation: View {
     private func clearAllContentFocus() {
         smartCTAFocused = false
         continueWatchingFocused = nil
-        featuredShowsFocused = nil
         liveStreamsFocused = nil
+        featuredShowsFocused = nil
     }
     
     private func headerSection() -> some View {
@@ -323,10 +323,12 @@ struct HomeViewWithNavigation: View {
             switch direction {
             case .down:
                 smartCTAFocused = false
+                // FIXED: Check if continue watching exists first, then go to continue watching
                 if !progressManager.getContinueWatchingVideos().isEmpty {
                     continueWatchingFocused = 0
                 } else {
-                    featuredShowsFocused = 0
+                    // If no continue watching, go to live streams
+                    liveStreamsFocused = 0
                 }
             case .up:
                 smartCTAFocused = false
@@ -390,7 +392,7 @@ struct HomeViewWithNavigation: View {
                                     smartCTAFocused = true
                                 case .down:
                                     continueWatchingFocused = nil
-                                    featuredShowsFocused = 0
+                                    liveStreamsFocused = 0 // Go to live streams next
                                 case .left:
                                     if index > 0 {
                                         continueWatchingFocused = index - 1
@@ -408,6 +410,85 @@ struct HomeViewWithNavigation: View {
                 }
                 .padding(.horizontal, 40)
             }
+        }
+    }
+    
+    // MARK: - Live Streams Section (MOVED BELOW CONTINUE WATCHING)
+    private var liveStreamsSection: some View {
+        VStack(alignment: .leading, spacing: 40) {
+            HStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 24))
+                        .foregroundColor(.red)
+                    
+                    Text("Live Streams")
+                        .font(.custom("Poppins-Medium", size: 24))
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .scaleEffect(1.5)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
+                    
+                    Text("Live now")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+            }
+            
+            HStack(spacing: 60) {
+                if apiService.isLoading || apiService.liveStreams.isEmpty {
+                    LoadingLiveStreamCard(number: "1", subtitle: "Greater Love TV I")
+                    LoadingLiveStreamCard(number: "2", subtitle: "Greater Love TV II")
+                } else {
+                    ForEach(Array(apiService.liveStreams.prefix(2).enumerated()), id: \.element.id) { index, stream in
+                        LiveStreamCard(
+                            stream: stream,
+                            number: "\(index + 1)",
+                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
+                            imageName: index == 0 ? "GL_live_1" : "GL_live_2"
+                        ) {
+                            selectedContent = stream
+                            showingVideoPlayer = true
+                        }
+                        .focused($liveStreamsFocused, equals: index)
+                        .onMoveCommand { direction in
+                            switch direction {
+                            case .up:
+                                liveStreamsFocused = nil
+                                // FIXED: Go back to continue watching if it exists, otherwise to CTA
+                                if !progressManager.getContinueWatchingVideos().isEmpty {
+                                    continueWatchingFocused = 0
+                                } else {
+                                    smartCTAFocused = true
+                                }
+                            case .down:
+                                liveStreamsFocused = nil
+                                featuredShowsFocused = 0
+                            case .left:
+                                if index > 0 {
+                                    liveStreamsFocused = index - 1
+                                }
+                            case .right:
+                                if index < 1 { // Only 2 live streams (0 and 1)
+                                    liveStreamsFocused = index + 1
+                                }
+                            default:
+                                break
+                            }
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 40)
         }
     }
     
@@ -457,14 +538,7 @@ struct HomeViewWithNavigation: View {
                                 switch direction {
                                 case .up:
                                     featuredShowsFocused = nil
-                                    if !progressManager.getContinueWatchingVideos().isEmpty {
-                                        continueWatchingFocused = 0
-                                    } else {
-                                        smartCTAFocused = true
-                                    }
-                                case .down:
-                                    featuredShowsFocused = nil
-                                    liveStreamsFocused = 0 // Always focus on first live stream
+                                    liveStreamsFocused = 0
                                 case .left:
                                     if index > 0 {
                                         featuredShowsFocused = index - 1
@@ -482,76 +556,6 @@ struct HomeViewWithNavigation: View {
                 }
                 .padding(.horizontal, 40)
             }
-        }
-    }
-    
-    private var liveStreamsSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.system(size: 24))
-                        .foregroundColor(.red)
-                    
-                    Text("Live Streams")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                        .scaleEffect(1.5)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
-                    
-                    Text("Live now")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.red)
-                }
-            }
-            
-            HStack(spacing: 60) {
-                if apiService.isLoading || apiService.liveStreams.isEmpty {
-                    LoadingLiveStreamCard(number: "1", subtitle: "Greater Love TV I")
-                    LoadingLiveStreamCard(number: "2", subtitle: "Greater Love TV II")
-                } else {
-                    ForEach(Array(apiService.liveStreams.prefix(2).enumerated()), id: \.element.id) { index, stream in
-                        LiveStreamCard(
-                            stream: stream,
-                            number: "\(index + 1)",
-                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
-                            imageName: index == 0 ? "GL_live_1" : "GL_live_2"
-                        ) {
-                            selectedContent = stream
-                            showingVideoPlayer = true
-                        }
-                        .focused($liveStreamsFocused, equals: index)
-                        .onMoveCommand { direction in
-                            switch direction {
-                            case .up:
-                                liveStreamsFocused = nil
-                                featuredShowsFocused = 0
-                            case .left:
-                                if index > 0 {
-                                    liveStreamsFocused = index - 1
-                                }
-                            case .right:
-                                if index < 1 { // Only 2 live streams (0 and 1)
-                                    liveStreamsFocused = index + 1
-                                }
-                            default:
-                                break
-                            }
-                        }
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding(.horizontal, 40)
         }
     }
     

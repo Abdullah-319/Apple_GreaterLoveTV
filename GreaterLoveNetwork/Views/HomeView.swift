@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Enhanced Home View with Smart Categorization
+// MARK: - Enhanced Home View with Smart Categorization and Reordered Sections
 struct HomeView: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -14,9 +14,9 @@ struct HomeView: View {
     
     enum FocusedSection: Hashable {
         case smartCTA
+        case liveStreams
         case continueWatching
         case featuredShows
-        case liveStreams
     }
     
     var body: some View {
@@ -25,6 +25,9 @@ struct HomeView: View {
             
             ScrollView {
                 VStack(spacing: 80) {
+                    // Live Streams moved to top (after header CTA)
+                    liveStreamsSection
+                    
                     // Show continue watching section only if there are videos in progress
                     if !progressManager.getContinueWatchingVideos().isEmpty {
                         continueWatchingSection
@@ -32,9 +35,6 @@ struct HomeView: View {
                     
                     // Featured Shows & Series (Ministers)
                     featuredShowsSection
-                    
-                    // Live Streams
-                    liveStreamsSection
                 }
                 .padding(.horizontal, 80)
                 .padding(.bottom, 100)
@@ -150,13 +150,77 @@ struct HomeView: View {
             if direction == .up {
                 // This will be handled by the ContentView
             } else if direction == .down {
-                // Move focus to continue watching or next section
-                if !progressManager.getContinueWatchingVideos().isEmpty {
-                    focusedSection = .continueWatching
-                } else {
-                    focusedSection = .featuredShows
+                // Move focus to live streams first
+                focusedSection = .liveStreams
+            }
+        }
+    }
+    
+    // MARK: - Live Streams Section (MOVED TO TOP)
+    private var liveStreamsSection: some View {
+        VStack(alignment: .leading, spacing: 40) {
+            HStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 24))
+                        .foregroundColor(.red)
+                    
+                    Text("Live Streams")
+                        .font(.custom("Poppins-Medium", size: 24))
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .scaleEffect(1.5)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
+                    
+                    Text("Live now")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.red)
                 }
             }
+            
+            HStack(spacing: 60) {
+                if apiService.isLoading || apiService.liveStreams.isEmpty {
+                    LoadingLiveStreamCard(number: "1", subtitle: "Greater Love TV I")
+                    LoadingLiveStreamCard(number: "2", subtitle: "Greater Love TV II")
+                } else {
+                    ForEach(Array(apiService.liveStreams.prefix(2).enumerated()), id: \.element.id) { index, stream in
+                        EnhancedLiveStreamCard(
+                            stream: stream,
+                            number: "\(index + 1)",
+                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
+                            imageName: index == 0 ? "GL_live_1" : "GL_live_2"
+                        ) {
+                            selectedContent = stream
+                            showingVideoPlayer = true
+                        }
+                        .focused($focusedSection, equals: .liveStreams)
+                        .onMoveCommand { direction in
+                            switch direction {
+                            case .up:
+                                focusedSection = .smartCTA
+                            case .down:
+                                if !progressManager.getContinueWatchingVideos().isEmpty {
+                                    focusedSection = .continueWatching
+                                } else {
+                                    focusedSection = .featuredShows
+                                }
+                            default:
+                                break
+                            }
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 40)
         }
     }
     
@@ -265,59 +329,6 @@ struct HomeView: View {
         }
     }
     
-    private var liveStreamsSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.system(size: 24))
-                        .foregroundColor(.red)
-                    
-                    Text("Live Streams")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                        .scaleEffect(1.5)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
-                    
-                    Text("Live now")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.red)
-                }
-            }
-            
-            HStack(spacing: 60) {
-                if apiService.isLoading || apiService.liveStreams.isEmpty {
-                    LoadingLiveStreamCard(number: "1", subtitle: "Greater Love TV I")
-                    LoadingLiveStreamCard(number: "2", subtitle: "Greater Love TV II")
-                } else {
-                    ForEach(Array(apiService.liveStreams.prefix(2).enumerated()), id: \.element.id) { index, stream in
-                        EnhancedLiveStreamCard(
-                            stream: stream,
-                            number: "\(index + 1)",
-                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
-                            imageName: index == 0 ? "GL_live_1" : "GL_live_2"
-                        ) {
-                            selectedContent = stream
-                            showingVideoPlayer = true
-                        }
-                        .focused($focusedSection, equals: .liveStreams)
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding(.horizontal, 40)
-        }
-    }
-    
     // MARK: - Helper Methods
     
     private func findEpisode(by episodeId: String) -> Episode? {
@@ -353,8 +364,7 @@ struct HomeView: View {
     }
 }
 
-
-// MARK: - Enhanced Live Stream Card with Custom Background Image
+// MARK: - Enhanced Live Stream Card with Custom Background Image and Immediate Playback
 struct EnhancedLiveStreamCard: View {
     let stream: LiveStream
     let number: String
@@ -413,6 +423,36 @@ struct EnhancedLiveStreamCard: View {
                         }
                     }
                     
+                    // Enhanced play icon overlay for immediate playback indication
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            
+                            VStack(spacing: 8) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.red.opacity(0.9))
+                                        .frame(width: 60, height: 60)
+                                    
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 24, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .scaleEffect(isFocused ? 1.1 : 1.0)
+                                
+                                Text("WATCH LIVE")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.red.opacity(0.9))
+                                    .cornerRadius(6)
+                            }
+                            .padding(16)
+                        }
+                    }
+                    
                     // Focus indicator
                     if isFocused {
                         RoundedRectangle(cornerRadius: 16)
@@ -433,10 +473,25 @@ struct EnhancedLiveStreamCard: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
                     
-                    Text(stream.name)
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(stream.name)
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                        
+                        // Additional live indicator
+                        if stream.broadcasting_status == "online" {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 6, height: 6)
+                                
+                                Text("LIVE")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
                 }
             }
         }
