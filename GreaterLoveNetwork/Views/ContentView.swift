@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Content View with Progress Manager and Enhanced Navigation
+// MARK: - Content View with Enhanced Navigation and Featured Content
 struct ContentView: View {
     @StateObject private var apiService = CastrAPIService()
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -178,6 +178,7 @@ struct HomeViewWithNavigation: View {
     @FocusState private var continueWatchingFocused: Int?
     @FocusState private var liveStreamsFocused: Int?
     @FocusState private var featuredShowsFocused: Int?
+    @FocusState private var featuredMinistersFocused: Int?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -193,8 +194,11 @@ struct HomeViewWithNavigation: View {
                     // Live Streams Section (MOVED BELOW CONTINUE WATCHING)
                     liveStreamsSection
                     
-                    // Featured Shows & Series (Ministers)
+                    // Featured Shows Section
                     featuredShowsSection
+                    
+                    // Featured Ministers Section
+                    featuredMinistersSection
                 }
                 .padding(.horizontal, 80)
                 .padding(.bottom, 100)
@@ -240,6 +244,7 @@ struct HomeViewWithNavigation: View {
         continueWatchingFocused = nil
         liveStreamsFocused = nil
         featuredShowsFocused = nil
+        featuredMinistersFocused = nil
     }
     
     private func headerSection() -> some View {
@@ -299,7 +304,7 @@ struct HomeViewWithNavigation: View {
                    let episode = findEpisode(by: firstVideo.videoId) {
                     selectedContent = episode
                     showingVideoPlayer = true
-                } else if let firstShow = apiService.shows.first {
+                } else if let firstShow = apiService.getFeaturedShows().first {
                     selectedShow = firstShow
                     showingShowDetail = true
                 }
@@ -323,7 +328,7 @@ struct HomeViewWithNavigation: View {
             switch direction {
             case .down:
                 smartCTAFocused = false
-                // FIXED: Check if continue watching exists first, then go to continue watching
+                // Check if continue watching exists first, then go to continue watching
                 if !progressManager.getContinueWatchingVideos().isEmpty {
                     continueWatchingFocused = 0
                 } else {
@@ -462,7 +467,7 @@ struct HomeViewWithNavigation: View {
                             switch direction {
                             case .up:
                                 liveStreamsFocused = nil
-                                // FIXED: Go back to continue watching if it exists, otherwise to CTA
+                                // Go back to continue watching if it exists, otherwise to CTA
                                 if !progressManager.getContinueWatchingVideos().isEmpty {
                                     continueWatchingFocused = 0
                                 } else {
@@ -496,34 +501,32 @@ struct HomeViewWithNavigation: View {
         VStack(alignment: .leading, spacing: 40) {
             HStack {
                 HStack(spacing: 12) {
-                    Image(systemName: "tv.circle.fill")
+                    Image(systemName: "star.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(.cyan)
+                        .foregroundColor(.yellow)
                     
-                    Text("Featured Ministers")
+                    Text("Featured Shows")
                         .font(.custom("Poppins-Medium", size: 24))
                         .foregroundColor(.white)
                 }
                 
                 Spacer()
                 
-                Text("Most active shows")
+                Text("Handpicked content")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 50) {
-                    if apiService.isLoading || apiService.shows.isEmpty {
+                    if apiService.isLoading || apiService.featuredShows.isEmpty {
                         ForEach(0..<6, id: \.self) { index in
                             LoadingShowCard(color: getLoadingColors()[index])
                         }
                     } else {
-                        let featuredShows = Array(apiService.shows
-                            .sorted { $0.episodeCount > $1.episodeCount }
-                            .prefix(6))
+                        let featuredShows = Array(apiService.getFeaturedShows().enumerated())
                         
-                        ForEach(Array(featuredShows.enumerated()), id: \.element.id) { index, show in
+                        ForEach(featuredShows, id: \.element.id) { index, show in
                             let colors: [Color] = getShowColors()
                             ShowInfoCard(
                                 show: show,
@@ -539,6 +542,9 @@ struct HomeViewWithNavigation: View {
                                 case .up:
                                     featuredShowsFocused = nil
                                     liveStreamsFocused = 0
+                                case .down:
+                                    featuredShowsFocused = nil
+                                    featuredMinistersFocused = 0
                                 case .left:
                                     if index > 0 {
                                         featuredShowsFocused = index - 1
@@ -546,6 +552,72 @@ struct HomeViewWithNavigation: View {
                                 case .right:
                                     if index < featuredShows.count - 1 {
                                         featuredShowsFocused = index + 1
+                                    }
+                                default:
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 40)
+            }
+        }
+    }
+    
+    private var featuredMinistersSection: some View {
+        VStack(alignment: .leading, spacing: 40) {
+            HStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.3.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.purple)
+                    
+                    Text("Featured Ministers")
+                        .font(.custom("Poppins-Medium", size: 24))
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                Text("Inspiring teachers")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 40) {
+                    if apiService.isLoading || apiService.featuredMinisters.isEmpty {
+                        ForEach(0..<6, id: \.self) { index in
+                            LoadingMinisterCard(index: index)
+                        }
+                    } else {
+                        let topMinisters = Array(apiService.getTopFeaturedMinisters(limit: 6).enumerated())
+                        
+                        ForEach(topMinisters, id: \.offset) { index, ministerData in
+                            let (ministerName, shows) = ministerData
+                            
+                            FeaturedMinisterCard(
+                                ministerName: ministerName,
+                                shows: shows,
+                                color: getMinisterColors()[index % getMinisterColors().count]
+                            ) { show in
+                                selectedShow = show
+                                showingShowDetail = true
+                            }
+                            .focused($featuredMinistersFocused, equals: index)
+                            .onMoveCommand { direction in
+                                switch direction {
+                                case .up:
+                                    featuredMinistersFocused = nil
+                                    featuredShowsFocused = 0
+                                case .left:
+                                    if index > 0 {
+                                        featuredMinistersFocused = index - 1
+                                    }
+                                case .right:
+                                    if index < topMinisters.count - 1 {
+                                        featuredMinistersFocused = index + 1
                                     }
                                 default:
                                     break
@@ -571,6 +643,18 @@ struct HomeViewWithNavigation: View {
     
     private func getShowColors() -> [Color] {
         return [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan]
+    }
+    
+    private func getMinisterColors() -> [Color] {
+        return [
+            Color(red: 0.1, green: 0.5, blue: 0.9),
+            Color(red: 0.7, green: 0.3, blue: 0.1),
+            Color(red: 0.2, green: 0.6, blue: 0.3),
+            Color(red: 0.5, green: 0.1, blue: 0.7),
+            Color(red: 0.9, green: 0.6, blue: 0.2),
+            Color(red: 0.8, green: 0.2, blue: 0.8),
+            Color(red: 0.3, green: 0.8, blue: 0.8)
+        ]
     }
     
     private func convertEpisodeToVideoData(_ episode: Episode) -> VideoData {

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Shows View (Only Shows, No Categories)
+// MARK: - Shows View with Pagination Support
 struct ShowsView: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -15,18 +15,44 @@ struct ShowsView: View {
             headerSection
             
             // Main Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 80) {
-                    // Continue Watching Section (if any)
-                    if !progressManager.getContinueWatchingVideos().isEmpty {
-                        continueWatchingSection
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 80) {
+                        // Continue Watching Section (if any)
+                        if !progressManager.getContinueWatchingVideos().isEmpty {
+                            continueWatchingSection
+                                .id("continue_watching")
+                        }
+                        
+                        // All Shows Grid with Pagination
+                        allShowsGridSection
+                            .id("shows_grid")
+                        
+                        // Load More Section
+                        if apiService.hasMorePages && !apiService.isLoadingMoreShows {
+                            loadMoreSection
+                                .id("load_more")
+                                .onAppear {
+                                    apiService.loadMoreShows()
+                                }
+                        }
+                        
+                        // Loading More Shows Indicator
+                        if apiService.isLoadingMoreShows {
+                            loadingMoreSection
+                                .id("loading_more")
+                        }
+                        
+                        // Pagination Info Section
+                        paginationInfoSection
+                            .id("pagination_info")
                     }
-                    
-                    // All Shows Grid
-                    allShowsGridSection
+                    .padding(.horizontal, 60)
+                    .padding(.bottom, 100)
                 }
-                .padding(.horizontal, 60)
-                .padding(.bottom, 100)
+                .onAppear {
+                    // ScrollViewReader proxy is available within this scope
+                }
             }
         }
         .background(
@@ -76,7 +102,7 @@ struct ShowsView: View {
                 
                 Spacer()
                 
-                // Statistics Card
+                // Enhanced Statistics Card with Pagination Info
                 VStack(alignment: .trailing, spacing: 8) {
                     HStack(spacing: 15) {
                         VStack(alignment: .center, spacing: 4) {
@@ -100,6 +126,19 @@ struct ShowsView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.7))
                         }
+                        
+//                        Rectangle()
+//                            .fill(Color.white.opacity(0.3))
+//                            .frame(width: 1, height: 40)
+                        
+//                        VStack(alignment: .center, spacing: 4) {
+//                            Text("\(apiService.currentPage)/\(apiService.totalPages)")
+//                                .font(.system(size: 20, weight: .bold))
+//                                .foregroundColor(.blue)
+//                            Text("Pages")
+//                                .font(.system(size: 12, weight: .medium))
+//                                .foregroundColor(.white.opacity(0.7))
+//                        }
                     }
                 }
                 .padding(.horizontal, 25)
@@ -187,13 +226,25 @@ struct ShowsView: View {
                 
                 Spacer()
                 
-                Text("Browse all available shows")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+//                if apiService.hasMorePages {
+//                    HStack(spacing: 8) {
+//                        Image(systemName: "arrow.down.circle")
+//                            .font(.system(size: 16))
+//                            .foregroundColor(.blue)
+//                        
+//                        Text("Scroll for more")
+//                            .font(.system(size: 16, weight: .medium))
+//                            .foregroundColor(.white.opacity(0.6))
+//                    }
+//                } else {
+//                    Text("All shows loaded")
+//                        .font(.system(size: 16, weight: .medium))
+//                        .foregroundColor(.green.opacity(0.8))
+//                }
             }
             
-            if apiService.isLoading || apiService.shows.isEmpty {
-                // Loading State - Grid of 9 loading cards
+            if apiService.isLoading && apiService.shows.isEmpty {
+                // Initial Loading State - Grid of 9 loading cards
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40),
@@ -204,7 +255,7 @@ struct ShowsView: View {
                     }
                 }
             } else {
-                // All Shows Grid - 3 columns
+                // All Shows Grid - 3 columns with actual data
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40),
@@ -218,6 +269,117 @@ struct ShowsView: View {
                     }
                 }
             }
+        }
+    }
+    
+    private var loadMoreSection: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.blue)
+                    
+                    Text("Loading more shows...")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                    
+                    Text("Page \(apiService.currentPage + 1) of \(apiService.totalPages)")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+                
+                Spacer()
+            }
+            .padding(.vertical, 30)
+        }
+    }
+    
+    private var loadingMoreSection: some View {
+        VStack(spacing: 30) {
+            HStack {
+                Spacer()
+                
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+                        .scaleEffect(1.5)
+                    
+                    Text("Loading more shows...")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.white)
+                    
+                    Text("Page \(apiService.currentPage) of \(apiService.totalPages)")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+                
+                Spacer()
+            }
+            .padding(.vertical, 40)
+            
+            // Loading preview cards
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 40),
+                GridItem(.flexible(), spacing: 40),
+                GridItem(.flexible(), spacing: 40)
+            ], spacing: 40) {
+                ForEach(0..<6, id: \.self) { index in
+                    LoadingShowGridCard(index: index)
+                }
+            }
+        }
+    }
+    
+    private var paginationInfoSection: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Spacer()
+                
+                VStack(spacing: 12) {
+//                    if !apiService.hasMorePages && !apiService.isLoading {
+//                        HStack(spacing: 8) {
+//                            Image(systemName: "checkmark.circle.fill")
+//                                .font(.system(size: 20))
+//                                .foregroundColor(.green)
+//                            
+//                            Text("All shows loaded!")
+//                                .font(.system(size: 18, weight: .semibold))
+//                                .foregroundColor(.white)
+//                        }
+//                        
+//                        Text("Showing all \(apiService.shows.count) shows across \(apiService.totalPages) pages")
+//                            .font(.system(size: 14, weight: .medium))
+//                            .foregroundColor(.white.opacity(0.7))
+//                    }
+                    
+                    // Manual Load More Button (backup)
+                    if apiService.hasMorePages && !apiService.isLoadingMoreShows {
+                        Button(action: {
+                            apiService.loadMoreShows()
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 16))
+                                
+                                Text("Load More Shows")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.blue)
+                            .cornerRadius(12)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.vertical, 20)
         }
     }
     
@@ -247,17 +409,18 @@ struct ShowsView: View {
     }
 }
 
-// MARK: - Show Grid Card Component
+// MARK: - Show Grid Card Component (Enhanced)
 struct ShowGridCard: View {
     let show: Show
     let action: () -> Void
     @FocusState private var isFocused: Bool
+    @State private var isHovered = false
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 20) {
                 ZStack {
-                    // Show background with category color
+                    // Show background with category color and enhanced styling
                     RoundedRectangle(cornerRadius: 20)
                         .fill(
                             LinearGradient(
@@ -286,6 +449,24 @@ struct ShowGridCard: View {
                                     )
                                 )
                         )
+                        .overlay(
+                            // Episode count badge in top right
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    
+                                    Text("\(show.episodeCount)")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.black.opacity(0.6))
+                                        .cornerRadius(12)
+                                        .padding(12)
+                                }
+                                Spacer()
+                            }
+                        )
                     
                     // Content overlay
                     VStack(spacing: 16) {
@@ -309,26 +490,14 @@ struct ShowGridCard: View {
                                 .lineLimit(2)
                                 .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                             
-                            // Episode count and category
-                            VStack(spacing: 4) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "tv.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.9))
-                                    
-                                    Text("\(show.episodeCount) episodes")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.9))
-                                }
-                                
-                                Text(show.showCategory.rawValue)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 4)
-                                    .background(Color.black.opacity(0.2))
-                                    .cornerRadius(8)
-                            }
+                            // Category badge
+                            Text(show.showCategory.rawValue)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.2))
+                                .cornerRadius(8)
                         }
                     }
                     .padding(24)
@@ -362,10 +531,22 @@ struct ShowGridCard: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                     
-                    Text("\(show.episodeCount) episodes")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text("\(show.episodeCount) episodes")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        if let latestEpisode = show.latestEpisode,
+                           let duration = latestEpisode.mediaInfo?.durationMins {
+                            Text("•")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                            
+                            Text("~\(duration) min")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                    }
                 }
             }
         }
@@ -375,7 +556,7 @@ struct ShowGridCard: View {
     }
 }
 
-// MARK: - Loading Show Grid Card
+// MARK: - Enhanced Loading Show Grid Card
 struct LoadingShowGridCard: View {
     let index: Int
     @State private var isAnimating = false

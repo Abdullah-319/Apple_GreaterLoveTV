@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Enhanced Home View with Smart Categorization and Reordered Sections
+// MARK: - Enhanced Home View with Featured Shows and Ministers
 struct HomeView: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -17,6 +17,7 @@ struct HomeView: View {
         case liveStreams
         case continueWatching
         case featuredShows
+        case featuredMinisters
     }
     
     var body: some View {
@@ -33,8 +34,11 @@ struct HomeView: View {
                         continueWatchingSection
                     }
                     
-                    // Featured Shows & Series (Ministers)
+                    // Featured Shows Section
                     featuredShowsSection
+                    
+                    // Featured Ministers Section
+//                    featuredMinistersSection
                 }
                 .padding(.horizontal, 80)
                 .padding(.bottom, 100)
@@ -125,7 +129,7 @@ struct HomeView: View {
                    let episode = findEpisode(by: firstVideo.videoId) {
                     selectedContent = episode
                     showingVideoPlayer = true
-                } else if let firstShow = apiService.shows.first {
+                } else if let firstShow = apiService.getFeaturedShows().first {
                     selectedShow = firstShow
                     showingShowDetail = true
                 }
@@ -278,41 +282,37 @@ struct HomeView: View {
         }
     }
     
+    // MARK: - Featured Shows Section
     private var featuredShowsSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             HStack {
                 HStack(spacing: 12) {
-                    Image(systemName: "tv.circle.fill")
+                    Image(systemName: "star.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(.cyan)
+                        .foregroundColor(.yellow)
                     
-                    Text("Featured Ministers")
+                    Text("Featured Shows")
                         .font(.custom("Poppins-Medium", size: 24))
                         .foregroundColor(.white)
                 }
                 
                 Spacer()
                 
-                Text("Most active shows")
+                Text("Handpicked content")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 50) {
-                    if apiService.isLoading || apiService.shows.isEmpty {
+                    if apiService.isLoading || apiService.featuredShows.isEmpty {
                         ForEach(0..<6, id: \.self) { index in
-                            LoadingShowCard(color: getLoadingColors()[index])
+                            LoadingShowCard(color: getFeaturedShowColors()[index])
                         }
                     } else {
-                        // Show top 6 shows with most episodes - displaying show info instead of latest episode
-                        let featuredShows = apiService.shows
-                            .sorted { $0.episodeCount > $1.episodeCount }
-                            .prefix(6)
-                        
-                        ForEach(Array(featuredShows.enumerated()), id: \.element.id) { index, show in
-                            let colors: [Color] = getShowColors()
-                            ShowInfoCard(
+                        ForEach(Array(apiService.getFeaturedShows().enumerated()), id: \.element.id) { index, show in
+                            let colors: [Color] = getFeaturedShowColors()
+                            FeaturedShowCard(
                                 show: show,
                                 color: colors[index % colors.count]
                             ) {
@@ -321,10 +321,89 @@ struct HomeView: View {
                             }
                             .environmentObject(apiService)
                             .focused($focusedSection, equals: .featuredShows)
+                            .onMoveCommand { direction in
+                                switch direction {
+                                case .up:
+                                    if !progressManager.getContinueWatchingVideos().isEmpty {
+                                        focusedSection = .continueWatching
+                                    } else {
+                                        focusedSection = .liveStreams
+                                    }
+                                case .down:
+                                    focusedSection = .featuredMinisters
+                                default:
+                                    break
+                                }
+                            }
                         }
                     }
                 }
                 .padding(.horizontal, 40)
+            }
+        }
+    }
+    
+    // MARK: - Featured Ministers Section
+    private var featuredMinistersSection: some View {
+        VStack(alignment: .leading, spacing: 40) {
+            HStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.3.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.purple)
+                    
+                    Text("Featured Ministers")
+                        .font(.custom("Poppins-Medium", size: 24))
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                Text("Inspiring teachers")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            
+            if apiService.isLoading || apiService.featuredMinisters.isEmpty {
+                // Loading state
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 40) {
+                        ForEach(0..<6, id: \.self) { index in
+                            LoadingMinisterCard(index: index)
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                }
+            } else {
+                // Ministers content
+                let topMinisters = apiService.getTopFeaturedMinisters(limit: 6)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 40) {
+                        ForEach(Array(topMinisters.enumerated()), id: \.offset) { index, ministerData in
+                            let (ministerName, shows) = ministerData
+                            
+                            FeaturedMinisterCard(
+                                ministerName: ministerName,
+                                shows: shows,
+                                color: getMinisterColors()[index % getMinisterColors().count]
+                            ) { show in
+                                selectedShow = show
+                                showingShowDetail = true
+                            }
+                            .focused($focusedSection, equals: .featuredMinisters)
+                            .onMoveCommand { direction in
+                                switch direction {
+                                case .up:
+                                    focusedSection = .featuredShows
+                                default:
+                                    break
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                }
             }
         }
     }
@@ -335,12 +414,27 @@ struct HomeView: View {
         return apiService.allEpisodes.first { $0._id == episodeId }
     }
     
-    private func getLoadingColors() -> [Color] {
-        return [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan]
+    private func getFeaturedShowColors() -> [Color] {
+        return [
+            Color(red: 0.2, green: 0.6, blue: 1.0),   // Blue
+            Color(red: 0.8, green: 0.4, blue: 0.2),   // Orange
+            Color(red: 0.3, green: 0.7, blue: 0.4),   // Green
+            Color(red: 0.6, green: 0.2, blue: 0.8),   // Purple
+            Color(red: 1.0, green: 0.7, blue: 0.3),   // Yellow
+            Color(red: 0.9, green: 0.3, blue: 0.9)    // Pink
+        ]
     }
     
-    private func getShowColors() -> [Color] {
-        return [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan]
+    private func getMinisterColors() -> [Color] {
+        return [
+            Color(red: 0.1, green: 0.5, blue: 0.9),   // Deep Blue
+            Color(red: 0.7, green: 0.3, blue: 0.1),   // Deep Orange
+            Color(red: 0.2, green: 0.6, blue: 0.3),   // Deep Green
+            Color(red: 0.5, green: 0.1, blue: 0.7),   // Deep Purple
+            Color(red: 0.9, green: 0.6, blue: 0.2),   // Deep Yellow
+            Color(red: 0.8, green: 0.2, blue: 0.8),   // Deep Pink
+            Color(red: 0.3, green: 0.8, blue: 0.8)    // Cyan
+        ]
     }
     
     // Helper function to convert Episode to VideoData for backward compatibility
@@ -361,6 +455,267 @@ struct HomeView: View {
                 hls_url: episode.playback?.hls_url
             )
         )
+    }
+}
+
+// MARK: - Featured Show Card
+struct FeaturedShowCard: View {
+    let show: Show
+    let color: Color
+    let action: () -> Void
+    @EnvironmentObject var apiService: CastrAPIService
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [color, color.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 160, height: 160)
+                        .overlay(
+                            // Featured badge
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.yellow)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.black.opacity(0.6))
+                                                .frame(width: 24, height: 24)
+                                        )
+                                        .padding(8)
+                                }
+                                Spacer()
+                            }
+                        )
+                    
+                    VStack(spacing: 8) {
+                        Image(systemName: show.showCategory.icon)
+                            .font(.system(size: 32, weight: .medium))
+                            .foregroundColor(.white)
+                        
+                        Text("\(show.episodeCount)")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("episodes")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+                .scaleEffect(isFocused ? 1.05 : 1.0)
+                
+                VStack(spacing: 8) {
+                    Text(show.displayName)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .frame(width: 160)
+                    
+                    Text(show.showCategory.rawValue)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .frame(width: 160)
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .focused($isFocused)
+        .animation(.easeInOut(duration: 0.1), value: isFocused)
+    }
+}
+
+// MARK: - Featured Minister Card
+struct FeaturedMinisterCard: View {
+    let ministerName: String
+    let shows: [Show]
+    let color: Color
+    let onShowSelect: (Show) -> Void
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            colors: [color.opacity(0.9), color.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 300, height: 180)
+                    .overlay(
+                        VStack(spacing: 16) {
+                            // Minister icon
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.2))
+                                    .frame(width: 60, height: 60)
+                                
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            VStack(spacing: 8) {
+                                Text(ministerName)
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "tv.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white.opacity(0.8))
+                                    
+                                    Text("\(shows.count) shows")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.9))
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.2))
+                                .cornerRadius(8)
+                            }
+                        }
+                    )
+                
+                // Focus indicator
+                if isFocused {
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white, lineWidth: 3)
+                        .frame(width: 300, height: 180)
+                }
+            }
+            .scaleEffect(isFocused ? 1.05 : 1.0)
+            
+            // Shows list for this minister
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(shows.prefix(3)) { show in
+                        Button(action: {
+                            onShowSelect(show)
+                        }) {
+                            VStack(spacing: 8) {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(color.opacity(0.6))
+                                    .frame(width: 80, height: 45)
+                                    .overlay(
+                                        Image(systemName: show.showCategory.icon)
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.white)
+                                    )
+                                
+                                Text(show.displayName)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .frame(width: 80)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+            .frame(width: 300)
+        }
+        .focused($isFocused)
+        .animation(.easeInOut(duration: 0.1), value: isFocused)
+    }
+}
+
+// MARK: - Loading Minister Card
+struct LoadingMinisterCard: View {
+    let index: Int
+    @State private var isAnimating = false
+    
+    private var loadingColors: [Color] {
+        return [
+            Color(red: 0.1, green: 0.5, blue: 0.9),
+            Color(red: 0.7, green: 0.3, blue: 0.1),
+            Color(red: 0.2, green: 0.6, blue: 0.3),
+            Color(red: 0.5, green: 0.1, blue: 0.7),
+            Color(red: 0.9, green: 0.6, blue: 0.2),
+            Color(red: 0.8, green: 0.2, blue: 0.8)
+        ]
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            loadingColors[index % loadingColors.count].opacity(0.6),
+                            loadingColors[index % loadingColors.count].opacity(0.3)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 300, height: 180)
+                .overlay(
+                    VStack(spacing: 16) {
+                        Circle()
+                            .fill(Color.white.opacity(0.3))
+                            .frame(width: 60, height: 60)
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            )
+                        
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.4))
+                                .frame(width: 120, height: 20)
+                            
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.white.opacity(0.3))
+                                .frame(width: 80, height: 16)
+                        }
+                    }
+                )
+                .scaleEffect(isAnimating ? 1.02 : 1.0)
+                .opacity(isAnimating ? 0.8 : 1.0)
+            
+            // Loading shows list
+            HStack(spacing: 12) {
+                ForEach(0..<3, id: \.self) { _ in
+                    VStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.gray.opacity(0.4))
+                            .frame(width: 80, height: 45)
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 60, height: 12)
+                    }
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAnimating)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.1) {
+                isAnimating = true
+            }
+        }
     }
 }
 

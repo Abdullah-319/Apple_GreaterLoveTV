@@ -3,25 +3,53 @@ import Foundation
 import AVKit
 import UIKit
 
-// MARK: - Enhanced API Service for Shows and Episodes
+// MARK: - Enhanced API Service with Pagination and Featured Content
 class CastrAPIService: ObservableObject {
     private let baseURL = "https://api.castr.com/v2"
     private let accessToken = "5aLoKjrNjly4"
     private let secretKey = "UjTCq8wOj76vjXznGFzdbMRzAkFq6VlJElBQ"
     
     @Published var liveStreams: [LiveStream] = []
-    @Published var shows: [Show] = [] // renamed from videos
-    @Published var allEpisodes: [Episode] = [] // renamed from videoData
-    @Published var showCollections: [ShowCollection] = [] // renamed from categories
+    @Published var shows: [Show] = []
+    @Published var allEpisodes: [Episode] = []
+    @Published var showCollections: [ShowCollection] = []
     @Published var recordings: [Recording] = []
+    @Published var featuredShows: [Show] = []
+    @Published var featuredMinisters: [String: [Show]] = [:]
     @Published var isLoading = false
+    @Published var isLoadingMoreShows = false
     @Published var errorMessage: String?
     @Published var thumbnailStates: [String: ThumbnailState] = [:]
     
-    // Backward compatibility properties - FIXED TYPES
+    // Pagination state
+    @Published var currentPage = 1
+    @Published var totalPages = 1
+    @Published var hasMorePages = false
+    
+    // Backward compatibility properties
     @Published var videos: [Show] = []
-    @Published var videoData: [VideoData] = [] // FIXED: Changed from [Episode] to [VideoData]
+    @Published var videoData: [VideoData] = []
     @Published var categories: [Category] = []
+    
+    // Featured content configuration
+    private let featuredShowNames = [
+        "Created to Praise",
+        "CT Townsend",
+        "Redemption Today",
+        "Mountain West Church",
+        "Manna-Fest",
+        "Pace Assembly"
+    ]
+    
+    private let featuredMinisterNames = [
+        "Tim Hill",
+        "CT Townsend",
+        "Brandon Porter",
+        "Todd Hoskins",
+        "Mo Huggins",
+        "Perry Stone",
+        "Joey Rogers"
+    ]
     
     private var authHeader: String {
         let credentials = "\(accessToken):\(secretKey)"
@@ -33,7 +61,7 @@ class CastrAPIService: ObservableObject {
     func fetchAllContent() {
         testAuthentication()
         addStaticLiveStreams()
-        fetchShows() // renamed from fetchVideos
+        fetchAllShowsWithPagination()
         fetchLiveStreams()
     }
     
@@ -89,12 +117,27 @@ class CastrAPIService: ObservableObject {
         }
     }
     
-    func fetchShows() { // renamed from fetchVideos
+    // MARK: - Pagination Methods
+    
+    func fetchAllShowsWithPagination() {
         isLoading = true
-        errorMessage = nil
+        currentPage = 1
+        shows.removeAll()
+        allEpisodes.removeAll()
+        fetchShowsPage(page: 1, isInitialLoad: true)
+    }
+    
+    func loadMoreShows() {
+        guard !isLoadingMoreShows && hasMorePages else { return }
         
-        guard let url = URL(string: "\(baseURL)/videos") else {
-            handleError("Invalid URL")
+        isLoadingMoreShows = true
+        currentPage += 1
+        fetchShowsPage(page: currentPage, isInitialLoad: false)
+    }
+    
+    private func fetchShowsPage(page: Int, isInitialLoad: Bool) {
+        guard let url = URL(string: "\(baseURL)/videos?page=\(page)") else {
+            handleError("Invalid URL for page \(page)")
             return
         }
         
@@ -126,39 +169,150 @@ class CastrAPIService: ObservableObject {
                 }
                 
                 if let jsonString = String(data: data, encoding: .utf8) {
-                    print("API Response: \(jsonString.prefix(500))...")
+                    print("API Response Page \(page): \(jsonString.prefix(500))...")
                 }
                 
                 do {
                     let response = try JSONDecoder().decode(ShowsResponse.self, from: data)
-                    self?.shows = response.docs.filter { $0.enabled }
                     
-                    var allEpisodes: [Episode] = []
-                    for show in response.docs where show.enabled {
-                        allEpisodes.append(contentsOf: show.episodes)
+                    // Update pagination info
+                    self?.totalPages = response.pages
+                    self?.hasMorePages = page < response.pages
+                    
+                    // Filter enabled shows
+                    let enabledShows = response.docs.filter { $0.enabled }
+                    
+                    // Append new shows to existing shows (for pagination)
+                    if isInitialLoad {
+                        self?.shows = enabledShows
+                    } else {
+                        self?.shows.append(contentsOf: enabledShows)
                     }
                     
-                    let enabledEpisodes = allEpisodes.filter { $0.enabled }
-                    self?.allEpisodes = enabledEpisodes
+                    // Process episodes
+                    var pageEpisodes: [Episode] = []
+                    for show in enabledShows {
+                        pageEpisodes.append(contentsOf: show.episodes.filter { $0.enabled })
+                    }
                     
-                    // Update backward compatibility properties - FIXED CONVERSION
+                    if isInitialLoad {
+                        self?.allEpisodes = pageEpisodes
+                    } else {
+                        self?.allEpisodes.append(contentsOf: pageEpisodes)
+                    }
+                    
+                    // Update backward compatibility properties
                     self?.videos = self?.shows ?? []
-                    self?.videoData = enabledEpisodes.map { self?.convertEpisodeToVideoData($0) ?? VideoData(dataId: "", fileName: "", enabled: false, bytes: 0, mediaInfo: nil, encodingRequired: false, precedence: 0, author: "", creationTime: "", _id: "", playback: nil) }.filter { !$0.fileName.isEmpty }
+                    self?.videoData = (self?.allEpisodes ?? []).map { self?.convertEpisodeToVideoData($0) ?? VideoData(dataId: "", fileName: "", enabled: false, bytes: 0, mediaInfo: nil, encodingRequired: false, precedence: 0, author: "", creationTime: "", _id: "", playback: nil) }.filter { !$0.fileName.isEmpty }
                     
-                    self?.createShowCollections(from: response.docs.filter { $0.enabled })
-                    self?.createCategories(from: enabledEpisodes) // Backward compatibility
-                    self?.isLoading = false
+                    // Update collections and categories
+                    self?.createShowCollections(from: self?.shows ?? [])
+                    self?.createCategories(from: self?.allEpisodes ?? [])
                     
-                    print("Successfully loaded \(enabledEpisodes.count) episodes from \(response.docs.count) shows")
+                    // Process featured content
+                    self?.processFeaturedContent()
+                    
+                    // Update loading states
+                    if isInitialLoad {
+                        self?.isLoading = false
+                    } else {
+                        self?.isLoadingMoreShows = false
+                    }
+                    
+                    print("Successfully loaded page \(page): \(enabledShows.count) shows, \(pageEpisodes.count) episodes")
+                    print("Total shows: \(self?.shows.count ?? 0), Total episodes: \(self?.allEpisodes.count ?? 0)")
+                    print("Has more pages: \(self?.hasMorePages ?? false)")
+                    
+                    // Automatically load more pages in background for better UX
+                    if isInitialLoad && (self?.hasMorePages ?? false) && page < 3 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            self?.loadMoreShows()
+                        }
+                    }
                     
                 } catch {
                     print("Shows Decoding error: \(error)")
                     self?.handleError("Failed to decode shows: \(error.localizedDescription)")
-                    self?.isLoading = false
+                    if isInitialLoad {
+                        self?.isLoading = false
+                    } else {
+                        self?.isLoadingMoreShows = false
+                    }
                 }
             }
         }.resume()
     }
+    
+    // MARK: - Featured Content Processing
+    
+    private func processFeaturedContent() {
+        // Process featured shows by name
+        var featured: [Show] = []
+        
+        for showName in featuredShowNames {
+            if let show = shows.first(where: {
+                $0.displayName.lowercased().contains(showName.lowercased()) ||
+                showName.lowercased().contains($0.displayName.lowercased())
+            }) {
+                featured.append(show)
+            }
+        }
+        
+        // If we don't have enough featured shows by name, add top shows by episode count
+        let remainingCount = max(0, 6 - featured.count)
+        let topShows = shows
+            .filter { show in !featured.contains { $0._id == show._id } }
+            .sorted { $0.episodeCount > $1.episodeCount }
+            .prefix(remainingCount)
+        
+        featured.append(contentsOf: topShows)
+        
+        self.featuredShows = Array(featured.prefix(6))
+        
+        // Process featured ministers
+        var ministers: [String: [Show]] = [:]
+        
+        for ministerName in featuredMinisterNames {
+            let ministerShows = shows.filter { show in
+                show.episodes.contains { episode in
+                    episode.author.lowercased().contains(ministerName.lowercased()) ||
+                    ministerName.lowercased().contains(episode.author.lowercased()) ||
+                    show.displayName.lowercased().contains(ministerName.lowercased())
+                }
+            }
+            
+            if !ministerShows.isEmpty {
+                ministers[ministerName] = Array(ministerShows.prefix(3)) // Limit to 3 shows per minister
+            }
+        }
+        
+        self.featuredMinisters = ministers
+        
+        print("Featured Shows: \(featuredShows.map { $0.displayName })")
+        print("Featured Ministers: \(featuredMinisters.keys.sorted())")
+    }
+    
+    // MARK: - Featured Content Getters
+    
+    func getFeaturedShows(limit: Int = 6) -> [Show] {
+        return Array(featuredShows.prefix(limit))
+    }
+    
+    func getFeaturedMinisters() -> [String: [Show]] {
+        return featuredMinisters
+    }
+    
+    func getShowsByMinister(_ ministerName: String) -> [Show] {
+        return featuredMinisters[ministerName] ?? []
+    }
+    
+    func getTopFeaturedMinisters(limit: Int = 6) -> [(String, [Show])] {
+        return Array(featuredMinisters
+            .sorted { $0.value.count > $1.value.count }
+            .prefix(limit))
+    }
+    
+    // MARK: - Live Streams
     
     func fetchLiveStreams() {
         guard let url = URL(string: "\(baseURL)/live_streams") else {
@@ -219,10 +373,13 @@ class CastrAPIService: ObservableObject {
     private func handleError(_ message: String) {
         errorMessage = message
         isLoading = false
+        isLoadingMoreShows = false
         print("Error: \(message)")
     }
     
-    func loadThumbnail(for episode: Episode) { // updated parameter type
+    // MARK: - Thumbnail Loading
+    
+    func loadThumbnail(for episode: Episode) {
         // Set loading state
         DispatchQueue.main.async {
             self.thumbnailStates[episode._id] = .loading
@@ -253,7 +410,6 @@ class CastrAPIService: ObservableObject {
     
     // Backward compatibility method
     func loadThumbnail(for videoData: VideoData) {
-        // Convert VideoData to Episode for processing
         let episode = Episode(
             episodeId: videoData.dataId,
             fileName: videoData.fileName,
@@ -292,6 +448,8 @@ class CastrAPIService: ObservableObject {
             )
         )
     }
+    
+    // MARK: - URL Extraction Methods
     
     func extractMP4URL(from embedURL: String, completion: @escaping (String?) -> Void) {
         guard let url = URL(string: embedURL) else {
@@ -373,7 +531,7 @@ class CastrAPIService: ObservableObject {
                 if let cgImage = cgImage {
                     let thumbnail = UIImage(cgImage: cgImage)
                     DispatchQueue.main.async {
-                     		   self?.thumbnailStates[episode._id] =	 .loaded(thumbnail)
+                        self?.thumbnailStates[episode._id] = .loaded(thumbnail)
                     }
                 } else {
                     DispatchQueue.main.async {
@@ -382,7 +540,7 @@ class CastrAPIService: ObservableObject {
                 }
             }
         }
-    }			
+    }
     
     private func generateThumbnailFromMP4(_ mp4URL: String, for episode: Episode) {
         guard let url = URL(string: mp4URL) else {
@@ -547,13 +705,6 @@ extension CastrAPIService {
         return showCollections.first { $0.category == category }?.shows ?? []
     }
     
-    func getFeaturedShows(limit: Int = 6) -> [Show] {
-        return shows
-            .sorted { $0.episodeCount > $1.episodeCount }
-            .prefix(limit)
-            .map { $0 }
-    }
-    
     func getRecentEpisodes(limit: Int = 10) -> [Episode] {
         return allEpisodes
             .sorted { episode1, episode2 in
@@ -574,6 +725,11 @@ extension CastrAPIService {
         analytics["total_shows"] = shows.count
         analytics["total_episodes"] = allEpisodes.count
         analytics["total_collections"] = showCollections.count
+        analytics["current_page"] = currentPage
+        analytics["total_pages"] = totalPages
+        analytics["has_more_pages"] = hasMorePages
+        analytics["featured_shows_count"] = featuredShows.count
+        analytics["featured_ministers_count"] = featuredMinisters.count
         analytics["average_episodes_per_show"] = shows.isEmpty ? 0 : allEpisodes.count / shows.count
         
         let showEpisodeCounts = shows.map { ($0.displayName, $0.episodeCount) }
