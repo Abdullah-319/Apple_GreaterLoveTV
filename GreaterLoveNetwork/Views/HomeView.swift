@@ -9,16 +9,11 @@ struct HomeView: View {
     @State private var selectedShow: Show?
     @State private var showingShowDetail = false
     
-    // Focus states for navigation
-    @FocusState private var focusedSection: FocusedSection?
-    
-    enum FocusedSection: Hashable {
-        case smartCTA
-        case liveStreams
-        case continueWatching
-        case featuredShows
-        case featuredMinisters
-    }
+    // Focus states for navigation - matching UI hierarchy
+    @FocusState private var smartCTAFocused: Bool
+    @FocusState private var continueWatchingFocused: Int?
+    @FocusState private var liveStreamsFocused: Int?
+    @FocusState private var featuredShowsFocused: Int?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -26,24 +21,28 @@ struct HomeView: View {
             
             ScrollView {
                 VStack(spacing: 80) {
-                    // Live Streams moved to top (after header CTA)
-                    liveStreamsSection
-                    
                     // Show continue watching section only if there are videos in progress
                     if !progressManager.getContinueWatchingVideos().isEmpty {
                         continueWatchingSection
                     }
                     
+                    // Live Streams Section
+                    liveStreamsSection
+                    
                     // Featured Shows Section
                     featuredShowsSection
-                    
-                    // Featured Ministers Section
-//                    featuredMinistersSection
                 }
                 .padding(.horizontal, 80)
                 .padding(.bottom, 100)
             }
             .background(Color.black.opacity(0.8))
+        }
+        .focusable()
+        .onMoveCommand { direction in
+            if direction == .down {
+                // When coming from navigation, focus should go to Smart CTA button first
+                smartCTAFocused = true
+            }
         }
         .sheet(isPresented: $showingVideoPlayer) {
             if let stream = selectedContent as? LiveStream {
@@ -67,9 +66,14 @@ struct HomeView: View {
         .onAppear {
             // Refresh progress manager when view appears
             progressManager.objectWillChange.send()
-            // Set initial focus to smart CTA
-            focusedSection = .smartCTA
         }
+    }
+    
+    private func clearAllContentFocus() {
+        smartCTAFocused = false
+        continueWatchingFocused = nil
+        liveStreamsFocused = nil
+        featuredShowsFocused = nil
     }
     
     private func headerSection() -> some View {
@@ -144,87 +148,27 @@ struct HomeView: View {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color(red: 0.9, green: 0.2, blue: 0.2))
                 )
-                .scaleEffect(focusedSection == .smartCTA ? 1.05 : 1.0)
+                .scaleEffect(smartCTAFocused ? 1.05 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($focusedSection, equals: .smartCTA)
-        .animation(.easeInOut(duration: 0.1), value: focusedSection)
+        .focused($smartCTAFocused)
+        .animation(.easeInOut(duration: 0.1), value: smartCTAFocused)
         .onMoveCommand { direction in
-            // Handle navigation up to the navigation bar
-            if direction == .up {
-                // This will be handled by the ContentView
-            } else if direction == .down {
-                // Move focus to live streams first
-                focusedSection = .liveStreams
-            }
-        }
-    }
-    
-    // MARK: - Live Streams Section (MOVED TO TOP)
-    private var liveStreamsSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.system(size: 24))
-                        .foregroundColor(.red)
-                    
-                    Text("Live Streams")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                        .scaleEffect(1.5)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
-                    
-                    Text("Live now")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.red)
-                }
-            }
-            
-            HStack(spacing: 60) {
-                if apiService.isLoading || apiService.liveStreams.isEmpty {
-                    LoadingLiveStreamCard(number: "1", subtitle: "Greater Love TV I")
-                    LoadingLiveStreamCard(number: "2", subtitle: "Greater Love TV II")
+            switch direction {
+            case .down:
+                smartCTAFocused = false
+                // Next focus depends on what content exists
+                if !progressManager.getContinueWatchingVideos().isEmpty {
+                    continueWatchingFocused = 0
                 } else {
-                    ForEach(Array(apiService.liveStreams.prefix(2).enumerated()), id: \.element.id) { index, stream in
-                        EnhancedLiveStreamCard(
-                            stream: stream,
-                            number: "\(index + 1)",
-                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
-                            imageName: index == 0 ? "GL_live_1" : "GL_live_2"
-                        ) {
-                            selectedContent = stream
-                            showingVideoPlayer = true
-                        }
-                        .focused($focusedSection, equals: .liveStreams)
-                        .onMoveCommand { direction in
-                            switch direction {
-                            case .up:
-                                focusedSection = .smartCTA
-                            case .down:
-                                if !progressManager.getContinueWatchingVideos().isEmpty {
-                                    focusedSection = .continueWatching
-                                } else {
-                                    focusedSection = .featuredShows
-                                }
-                            default:
-                                break
-                            }
-                        }
-                    }
+                    liveStreamsFocused = 0
                 }
-                
-                Spacer()
+            case .up:
+                smartCTAFocused = false
+                // Move back to navigation - will be handled by parent
+            default:
+                break
             }
-            .padding(.horizontal, 40)
         }
     }
     
@@ -273,12 +217,111 @@ struct HomeView: View {
                                 showingVideoPlayer = true
                             }
                             .environmentObject(apiService)
-                            .focused($focusedSection, equals: .continueWatching)
+                            .focused($continueWatchingFocused, equals: index)
+                            .onMoveCommand { direction in
+                                switch direction {
+                                case .up:
+                                    continueWatchingFocused = nil
+                                    smartCTAFocused = true
+                                case .down:
+                                    continueWatchingFocused = nil
+                                    liveStreamsFocused = 0
+                                case .left:
+                                    if index > 0 {
+                                        continueWatchingFocused = index - 1
+                                    }
+                                case .right:
+                                    if index < progressManager.getContinueWatchingVideos().count - 1 {
+                                        continueWatchingFocused = index + 1
+                                    }
+                                default:
+                                    break
+                                }
+                            }
                         }
                     }
                 }
                 .padding(.horizontal, 40)
             }
+        }
+    }
+    
+    // MARK: - Live Streams Section
+    private var liveStreamsSection: some View {
+        VStack(alignment: .leading, spacing: 40) {
+            HStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 24))
+                        .foregroundColor(.red)
+                    
+                    Text("Live Streams")
+                        .font(.custom("Poppins-Medium", size: 24))
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .scaleEffect(1.5)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
+                    
+                    Text("Live now")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+            }
+            
+            HStack(spacing: 60) {
+                if apiService.isLoading || apiService.liveStreams.isEmpty {
+                    LoadingLiveStreamCard(number: "1", subtitle: "Greater Love TV I")
+                    LoadingLiveStreamCard(number: "2", subtitle: "Greater Love TV II")
+                } else {
+                    ForEach(Array(apiService.liveStreams.prefix(2).enumerated()), id: \.element.id) { index, stream in
+                        EnhancedLiveStreamCard(
+                            stream: stream,
+                            number: "\(index + 1)",
+                            subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
+                            imageName: index == 0 ? "GL_live_1" : "GL_live_2"
+                        ) {
+                            selectedContent = stream
+                            showingVideoPlayer = true
+                        }
+                        .focused($liveStreamsFocused, equals: index)
+                        .onMoveCommand { direction in
+                            switch direction {
+                            case .up:
+                                liveStreamsFocused = nil
+                                // Go back to continue watching if it exists, otherwise to Smart CTA
+                                if !progressManager.getContinueWatchingVideos().isEmpty {
+                                    continueWatchingFocused = 0
+                                } else {
+                                    smartCTAFocused = true
+                                }
+                            case .down:
+                                liveStreamsFocused = nil
+                                featuredShowsFocused = 0
+                            case .left:
+                                if index > 0 {
+                                    liveStreamsFocused = index - 1
+                                }
+                            case .right:
+                                if index < 1 { // Only 2 live streams (0 and 1)
+                                    liveStreamsFocused = index + 1
+                                }
+                            default:
+                                break
+                            }
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 40)
         }
     }
     
@@ -320,17 +363,20 @@ struct HomeView: View {
                                 showingShowDetail = true
                             }
                             .environmentObject(apiService)
-                            .focused($focusedSection, equals: .featuredShows)
+                            .focused($featuredShowsFocused, equals: index)
                             .onMoveCommand { direction in
                                 switch direction {
                                 case .up:
-                                    if !progressManager.getContinueWatchingVideos().isEmpty {
-                                        focusedSection = .continueWatching
-                                    } else {
-                                        focusedSection = .liveStreams
+                                    featuredShowsFocused = nil
+                                    liveStreamsFocused = 0
+                                case .left:
+                                    if index > 0 {
+                                        featuredShowsFocused = index - 1
                                     }
-                                case .down:
-                                    focusedSection = .featuredMinisters
+                                case .right:
+                                    if index < apiService.getFeaturedShows().count - 1 {
+                                        featuredShowsFocused = index + 1
+                                    }
                                 default:
                                     break
                                 }
@@ -339,71 +385,6 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, 40)
-            }
-        }
-    }
-    
-    // MARK: - Featured Ministers Section
-    private var featuredMinistersSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.purple)
-                    
-                    Text("Featured Ministers")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                Text("Inspiring teachers")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
-            if apiService.isLoading || apiService.featuredMinisters.isEmpty {
-                // Loading state
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 40) {
-                        ForEach(0..<6, id: \.self) { index in
-                            LoadingMinisterCard(index: index)
-                        }
-                    }
-                    .padding(.horizontal, 40)
-                }
-            } else {
-                // Ministers content
-                let topMinisters = apiService.getTopFeaturedMinisters(limit: 6)
-                
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 40) {
-                        ForEach(Array(topMinisters.enumerated()), id: \.offset) { index, ministerData in
-                            let (ministerName, shows) = ministerData
-                            
-                            FeaturedMinisterCard(
-                                ministerName: ministerName,
-                                shows: shows,
-                                color: getMinisterColors()[index % getMinisterColors().count]
-                            ) { show in
-                                selectedShow = show
-                                showingShowDetail = true
-                            }
-                            .focused($focusedSection, equals: .featuredMinisters)
-                            .onMoveCommand { direction in
-                                switch direction {
-                                case .up:
-                                    focusedSection = .featuredShows
-                                default:
-                                    break
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 40)
-                }
             }
         }
     }
@@ -422,18 +403,6 @@ struct HomeView: View {
             Color(red: 0.6, green: 0.2, blue: 0.8),   // Purple
             Color(red: 1.0, green: 0.7, blue: 0.3),   // Yellow
             Color(red: 0.9, green: 0.3, blue: 0.9)    // Pink
-        ]
-    }
-    
-    private func getMinisterColors() -> [Color] {
-        return [
-            Color(red: 0.1, green: 0.5, blue: 0.9),   // Deep Blue
-            Color(red: 0.7, green: 0.3, blue: 0.1),   // Deep Orange
-            Color(red: 0.2, green: 0.6, blue: 0.3),   // Deep Green
-            Color(red: 0.5, green: 0.1, blue: 0.7),   // Deep Purple
-            Color(red: 0.9, green: 0.6, blue: 0.2),   // Deep Yellow
-            Color(red: 0.8, green: 0.2, blue: 0.8),   // Deep Pink
-            Color(red: 0.3, green: 0.8, blue: 0.8)    // Cyan
         ]
     }
     
@@ -535,187 +504,6 @@ struct FeaturedShowCard: View {
         .buttonStyle(PlainButtonStyle())
         .focused($isFocused)
         .animation(.easeInOut(duration: 0.1), value: isFocused)
-    }
-}
-
-// MARK: - Featured Minister Card
-struct FeaturedMinisterCard: View {
-    let ministerName: String
-    let shows: [Show]
-    let color: Color
-    let onShowSelect: (Show) -> Void
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [color.opacity(0.9), color.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 300, height: 180)
-                    .overlay(
-                        VStack(spacing: 16) {
-                            // Minister icon
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.2))
-                                    .frame(width: 60, height: 60)
-                                
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 28, weight: .medium))
-                                    .foregroundColor(.white)
-                            }
-                            
-                            VStack(spacing: 8) {
-                                Text(ministerName)
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                
-                                HStack(spacing: 8) {
-                                    Image(systemName: "tv.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.8))
-                                    
-                                    Text("\(shows.count) shows")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.9))
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.2))
-                                .cornerRadius(8)
-                            }
-                        }
-                    )
-                
-                // Focus indicator
-                if isFocused {
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.white, lineWidth: 3)
-                        .frame(width: 300, height: 180)
-                }
-            }
-            .scaleEffect(isFocused ? 1.05 : 1.0)
-            
-            // Shows list for this minister
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(shows.prefix(3)) { show in
-                        Button(action: {
-                            onShowSelect(show)
-                        }) {
-                            VStack(spacing: 8) {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(color.opacity(0.6))
-                                    .frame(width: 80, height: 45)
-                                    .overlay(
-                                        Image(systemName: show.showCategory.icon)
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.white)
-                                    )
-                                
-                                Text(show.displayName)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                                    .frame(width: 80)
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-            .frame(width: 300)
-        }
-        .focused($isFocused)
-        .animation(.easeInOut(duration: 0.1), value: isFocused)
-    }
-}
-
-// MARK: - Loading Minister Card
-struct LoadingMinisterCard: View {
-    let index: Int
-    @State private var isAnimating = false
-    
-    private var loadingColors: [Color] {
-        return [
-            Color(red: 0.1, green: 0.5, blue: 0.9),
-            Color(red: 0.7, green: 0.3, blue: 0.1),
-            Color(red: 0.2, green: 0.6, blue: 0.3),
-            Color(red: 0.5, green: 0.1, blue: 0.7),
-            Color(red: 0.9, green: 0.6, blue: 0.2),
-            Color(red: 0.8, green: 0.2, blue: 0.8)
-        ]
-    }
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            loadingColors[index % loadingColors.count].opacity(0.6),
-                            loadingColors[index % loadingColors.count].opacity(0.3)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 300, height: 180)
-                .overlay(
-                    VStack(spacing: 16) {
-                        Circle()
-                            .fill(Color.white.opacity(0.3))
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            )
-                        
-                        VStack(spacing: 8) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.4))
-                                .frame(width: 120, height: 20)
-                            
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.white.opacity(0.3))
-                                .frame(width: 80, height: 16)
-                        }
-                    }
-                )
-                .scaleEffect(isAnimating ? 1.02 : 1.0)
-                .opacity(isAnimating ? 0.8 : 1.0)
-            
-            // Loading shows list
-            HStack(spacing: 12) {
-                ForEach(0..<3, id: \.self) { _ in
-                    VStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.4))
-                            .frame(width: 80, height: 45)
-                        
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 60, height: 12)
-                    }
-                }
-            }
-        }
-        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAnimating)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.1) {
-                isAnimating = true
-            }
-        }
     }
 }
 

@@ -5,7 +5,6 @@ struct ContentView: View {
     @StateObject private var apiService = CastrAPIService()
     @StateObject private var progressManager = WatchProgressManager.shared
     @State private var selectedNavItem = "HOME"
-    @State private var navigationFocused: Bool = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -27,25 +26,22 @@ struct ContentView: View {
                 .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    NavigationBarWithFocus(
-                        selectedItem: $selectedNavItem,
-                        navigationFocused: $navigationFocused
-                    )
+                    NavigationBarWithProperFocus(selectedItem: $selectedNavItem)
                     
                     ScrollViewReader { proxy in
                         ScrollView {
                             Group {
                                 switch selectedNavItem {
                                 case "HOME":
-                                    HomeViewWithNavigation(navigationFocused: $navigationFocused)
+                                    HomeViewWithProperNavigation()
                                         .environmentObject(apiService)
                                         .environmentObject(progressManager)
                                         .id("HOME_TOP")
                                 case "ABOUT US":
-                                    AboutViewWithNavigation(navigationFocused: $navigationFocused)
+                                    AboutViewWithProperNavigation()
                                         .id("ABOUT_TOP")
                                 case "ALL SHOWS":
-                                    ShowsViewWithNavigation(navigationFocused: $navigationFocused)
+                                    ShowsViewWithProperNavigation()
                                         .environmentObject(apiService)
                                         .environmentObject(progressManager)
                                         .id("SHOWS_TOP")
@@ -53,7 +49,7 @@ struct ContentView: View {
                                     QRCodesView()
                                         .id("INFO_TOP")
                                 default:
-                                    HomeViewWithNavigation(navigationFocused: $navigationFocused)
+                                    HomeViewWithProperNavigation()
                                         .environmentObject(apiService)
                                         .environmentObject(progressManager)
                                         .id("DEFAULT_TOP")
@@ -61,7 +57,7 @@ struct ContentView: View {
                             }
                         }
                         .onChange(of: selectedNavItem) { newValue in
-                            // Scroll to top when menu item changes and reset navigation focus
+                            // Scroll to top when menu item changes
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 switch newValue {
                                 case "HOME":
@@ -76,8 +72,6 @@ struct ContentView: View {
                                     proxy.scrollTo("DEFAULT_TOP", anchor: .top)
                                 }
                             }
-                            // Reset navigation focus when page changes
-                            navigationFocused = true
                         }
                     }
                 }
@@ -85,19 +79,17 @@ struct ContentView: View {
         }
         .onAppear {
             apiService.fetchAllContent()
-            // Set initial focus to navigation
-            navigationFocused = true
         }
     }
 }
 
-// MARK: - Navigation Bar with Focus Coordination
-struct NavigationBarWithFocus: View {
+// MARK: - Navigation Bar with Proper Focus Management
+struct NavigationBarWithProperFocus: View {
     @Binding var selectedItem: String
-    @Binding var navigationFocused: Bool
     
     private let navItems = ["HOME", "ABOUT US", "ALL SHOWS", "INFO"]
     @FocusState private var focusedItem: String?
+    @State private var shouldMaintainFocus = false
     
     var body: some View {
         HStack {
@@ -121,19 +113,13 @@ struct NavigationBarWithFocus: View {
                         isSelected: selectedItem == item,
                         isFocused: focusedItem == item
                     ) {
+                        // Change page but maintain focus on navigation
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedItem = item
+                            shouldMaintainFocus = true
                         }
                     }
                     .focused($focusedItem, equals: item)
-                    .onChange(of: focusedItem) { newFocusedItem in
-                        // Automatically navigate when focus changes
-                        if let newItem = newFocusedItem, newItem != selectedItem {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                selectedItem = newItem
-                            }
-                        }
-                    }
                 }
             }
             .padding(.trailing, 60)
@@ -143,10 +129,15 @@ struct NavigationBarWithFocus: View {
         .padding(.vertical, 25)
         .background(Color.black.opacity(0.95))
         .zIndex(1)
-        .onChange(of: navigationFocused) { isFocused in
-            if isFocused && focusedItem == nil {
-                focusedItem = selectedItem
+        .onChange(of: focusedItem) { newFocusedItem in
+            // Only navigate when focus changes if we're not maintaining focus
+            if let newItem = newFocusedItem, newItem != selectedItem && !shouldMaintainFocus {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    selectedItem = newItem
+                }
             }
+            // Reset the maintain focus flag after processing
+            shouldMaintainFocus = false
         }
         .onAppear {
             // Set initial focus to the selected item
@@ -154,18 +145,11 @@ struct NavigationBarWithFocus: View {
                 focusedItem = selectedItem
             }
         }
-        .onMoveCommand { direction in
-            // Allow moving down from navigation to content
-            if direction == .down {
-                navigationFocused = false
-            }
-        }
     }
 }
 
-// MARK: - Wrapper Views for Navigation Coordination
-struct HomeViewWithNavigation: View {
-    @Binding var navigationFocused: Bool
+// MARK: - Home View with Proper Navigation Flow
+struct HomeViewWithProperNavigation: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
     @State private var selectedContent: Any?
@@ -173,12 +157,11 @@ struct HomeViewWithNavigation: View {
     @State private var selectedShow: Show?
     @State private var showingShowDetail = false
     
-    // Focus states for navigation - using individual focus states for each card/button
+    // Focus states for proper navigation flow - matching UI hierarchy
     @FocusState private var smartCTAFocused: Bool
     @FocusState private var continueWatchingFocused: Int?
     @FocusState private var liveStreamsFocused: Int?
     @FocusState private var featuredShowsFocused: Int?
-    @FocusState private var featuredMinistersFocused: Int?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -191,14 +174,11 @@ struct HomeViewWithNavigation: View {
                         continueWatchingSection
                     }
                     
-                    // Live Streams Section (MOVED BELOW CONTINUE WATCHING)
+                    // Live Streams Section
                     liveStreamsSection
                     
                     // Featured Shows Section
                     featuredShowsSection
-                    
-                    // Featured Ministers Section
-                    featuredMinistersSection
                 }
                 .padding(.horizontal, 80)
                 .padding(.bottom, 100)
@@ -224,17 +204,11 @@ struct HomeViewWithNavigation: View {
                 .environmentObject(apiService)
             }
         }
-        .onChange(of: navigationFocused) { isFocused in
-            if !isFocused {
-                // When navigation loses focus, set focus to smart CTA
-                smartCTAFocused = true
-            }
-        }
+        .focusable()
         .onMoveCommand { direction in
-            if direction == .up {
-                // Clear all content focus and move to navigation
-                clearAllContentFocus()
-                navigationFocused = true
+            if direction == .down {
+                // When coming from navigation, first focus should go to Smart CTA button
+                smartCTAFocused = true
             }
         }
     }
@@ -244,7 +218,6 @@ struct HomeViewWithNavigation: View {
         continueWatchingFocused = nil
         liveStreamsFocused = nil
         featuredShowsFocused = nil
-        featuredMinistersFocused = nil
     }
     
     private func headerSection() -> some View {
@@ -328,16 +301,15 @@ struct HomeViewWithNavigation: View {
             switch direction {
             case .down:
                 smartCTAFocused = false
-                // Check if continue watching exists first, then go to continue watching
+                // Next focus depends on what content exists
                 if !progressManager.getContinueWatchingVideos().isEmpty {
                     continueWatchingFocused = 0
                 } else {
-                    // If no continue watching, go to live streams
                     liveStreamsFocused = 0
                 }
             case .up:
                 smartCTAFocused = false
-                navigationFocused = true
+                // Move back to navigation
             default:
                 break
             }
@@ -397,7 +369,7 @@ struct HomeViewWithNavigation: View {
                                     smartCTAFocused = true
                                 case .down:
                                     continueWatchingFocused = nil
-                                    liveStreamsFocused = 0 // Go to live streams next
+                                    liveStreamsFocused = 0
                                 case .left:
                                     if index > 0 {
                                         continueWatchingFocused = index - 1
@@ -418,7 +390,7 @@ struct HomeViewWithNavigation: View {
         }
     }
     
-    // MARK: - Live Streams Section (MOVED BELOW CONTINUE WATCHING)
+    // MARK: - Live Streams Section
     private var liveStreamsSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             HStack {
@@ -467,7 +439,7 @@ struct HomeViewWithNavigation: View {
                             switch direction {
                             case .up:
                                 liveStreamsFocused = nil
-                                // Go back to continue watching if it exists, otherwise to CTA
+                                // Go back to continue watching if it exists, otherwise to Smart CTA
                                 if !progressManager.getContinueWatchingVideos().isEmpty {
                                     continueWatchingFocused = 0
                                 } else {
@@ -543,8 +515,8 @@ struct HomeViewWithNavigation: View {
                                     featuredShowsFocused = nil
                                     liveStreamsFocused = 0
                                 case .down:
-                                    featuredShowsFocused = nil
-                                    featuredMinistersFocused = 0
+                                    // No section below Featured Shows
+                                    break
                                 case .left:
                                     if index > 0 {
                                         featuredShowsFocused = index - 1
@@ -552,72 +524,6 @@ struct HomeViewWithNavigation: View {
                                 case .right:
                                     if index < featuredShows.count - 1 {
                                         featuredShowsFocused = index + 1
-                                    }
-                                default:
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 40)
-            }
-        }
-    }
-    
-    private var featuredMinistersSection: some View {
-        VStack(alignment: .leading, spacing: 40) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.purple)
-                    
-                    Text("Featured Ministers")
-                        .font(.custom("Poppins-Medium", size: 24))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                Text("Inspiring teachers")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 40) {
-                    if apiService.isLoading || apiService.featuredMinisters.isEmpty {
-                        ForEach(0..<6, id: \.self) { index in
-                            LoadingMinisterCard(index: index)
-                        }
-                    } else {
-                        let topMinisters = Array(apiService.getTopFeaturedMinisters(limit: 6).enumerated())
-                        
-                        ForEach(topMinisters, id: \.offset) { index, ministerData in
-                            let (ministerName, shows) = ministerData
-                            
-                            FeaturedMinisterCard(
-                                ministerName: ministerName,
-                                shows: shows,
-                                color: getMinisterColors()[index % getMinisterColors().count]
-                            ) { show in
-                                selectedShow = show
-                                showingShowDetail = true
-                            }
-                            .focused($featuredMinistersFocused, equals: index)
-                            .onMoveCommand { direction in
-                                switch direction {
-                                case .up:
-                                    featuredMinistersFocused = nil
-                                    featuredShowsFocused = 0
-                                case .left:
-                                    if index > 0 {
-                                        featuredMinistersFocused = index - 1
-                                    }
-                                case .right:
-                                    if index < topMinisters.count - 1 {
-                                        featuredMinistersFocused = index + 1
                                     }
                                 default:
                                     break
@@ -645,18 +551,6 @@ struct HomeViewWithNavigation: View {
         return [Color.blue, Color.purple, Color.green, Color.orange, Color.red, Color.cyan]
     }
     
-    private func getMinisterColors() -> [Color] {
-        return [
-            Color(red: 0.1, green: 0.5, blue: 0.9),
-            Color(red: 0.7, green: 0.3, blue: 0.1),
-            Color(red: 0.2, green: 0.6, blue: 0.3),
-            Color(red: 0.5, green: 0.1, blue: 0.7),
-            Color(red: 0.9, green: 0.6, blue: 0.2),
-            Color(red: 0.8, green: 0.2, blue: 0.8),
-            Color(red: 0.3, green: 0.8, blue: 0.8)
-        ]
-    }
-    
     private func convertEpisodeToVideoData(_ episode: Episode) -> VideoData {
         return VideoData(
             dataId: episode.episodeId,
@@ -674,6 +568,42 @@ struct HomeViewWithNavigation: View {
                 hls_url: episode.playback?.hls_url
             )
         )
+    }
+}
+
+// MARK: - About View Wrapper with Proper Navigation
+struct AboutViewWithProperNavigation: View {
+    @FocusState private var isContentFocused: Bool
+    
+    var body: some View {
+        AboutView()
+            .focused($isContentFocused)
+            .focusable()
+            .onMoveCommand { direction in
+                if direction == .down {
+                    isContentFocused = true
+                }
+            }
+    }
+}
+
+// MARK: - Shows View Wrapper with Proper Navigation
+struct ShowsViewWithProperNavigation: View {
+    @EnvironmentObject var apiService: CastrAPIService
+    @StateObject private var progressManager = WatchProgressManager.shared
+    @FocusState private var isContentFocused: Bool
+    
+    var body: some View {
+        ShowsView()
+            .environmentObject(apiService)
+            .environmentObject(progressManager)
+            .focused($isContentFocused)
+            .focusable()
+            .onMoveCommand { direction in
+                if direction == .down {
+                    isContentFocused = true
+                }
+            }
     }
 }
 
@@ -735,56 +665,5 @@ struct ShowInfoCard: View {
         .buttonStyle(PlainButtonStyle())
         .focused($isFocused)
         .animation(.easeInOut(duration: 0.1), value: isFocused)
-    }
-}
-
-// MARK: - About View Wrapper with Navigation
-struct AboutViewWithNavigation: View {
-    @Binding var navigationFocused: Bool
-    @FocusState private var isContentFocused: Bool
-    
-    var body: some View {
-        AboutView()
-            .focused($isContentFocused)
-            .onChange(of: navigationFocused) { isFocused in
-                if !isFocused {
-                    isContentFocused = true
-                }
-            }
-            .onMoveCommand { direction in
-                if direction == .up {
-                    isContentFocused = false
-                    navigationFocused = true
-                }
-            }
-    }
-}
-
-// MARK: - Shows View Wrapper with Navigation
-struct ShowsViewWithNavigation: View {
-    @Binding var navigationFocused: Bool
-    @EnvironmentObject var apiService: CastrAPIService
-    @StateObject private var progressManager = WatchProgressManager.shared
-    @FocusState private var isContentFocused: Bool
-    
-    var body: some View {
-        ShowsView()
-            .environmentObject(apiService)
-            .environmentObject(progressManager)
-            .focused($isContentFocused)
-            .onChange(of: navigationFocused) { isFocused in
-                if !isFocused {
-                    // Set focus to content with a small delay to ensure proper navigation
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        isContentFocused = true
-                    }
-                }
-            }
-            .onMoveCommand { direction in
-                if direction == .up {
-                    isContentFocused = false
-                    navigationFocused = true
-                }
-            }
     }
 }

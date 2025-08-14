@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Shows View with Pagination Support
+// MARK: - Shows View with Fixed Grid Navigation
 struct ShowsView: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -9,6 +9,16 @@ struct ShowsView: View {
     @State private var selectedShow: Show?
     @State private var showingShowDetail = false
     
+    // Focus management for proper grid navigation
+    @FocusState private var focusedShow: String?
+    @FocusState private var continueWatchingFocused: Int?
+    @State private var gridColumns = 3
+    @State private var totalShows = 0
+    
+    var sortedShows: [Show] {
+        return apiService.shows.sorted { $0.episodeCount > $1.episodeCount }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Enhanced Header Section
@@ -24,7 +34,7 @@ struct ShowsView: View {
                                 .id("continue_watching")
                         }
                         
-                        // All Shows Grid with Pagination
+                        // All Shows Grid with Fixed Navigation
                         allShowsGridSection
                             .id("shows_grid")
                         
@@ -51,7 +61,10 @@ struct ShowsView: View {
                     .padding(.bottom, 100)
                 }
                 .onAppear {
-                    // ScrollViewReader proxy is available within this scope
+                    totalShows = sortedShows.count
+                }
+                .onChange(of: apiService.shows.count) { newCount in
+                    totalShows = newCount
                 }
             }
         }
@@ -66,6 +79,17 @@ struct ShowsView: View {
                 endPoint: .bottom
             )
         )
+        .focusable()
+        .onMoveCommand { direction in
+            if direction == .down {
+                // When coming from navigation, go to continue watching or shows grid
+                if !progressManager.getContinueWatchingVideos().isEmpty {
+                    continueWatchingFocused = 0
+                } else if !sortedShows.isEmpty {
+                    focusedShow = sortedShows.first?.id.uuidString
+                }
+            }
+        }
         .sheet(isPresented: $showingVideoPlayer) {
             if let stream = selectedContent as? LiveStream {
                 LiveTVPlayerView(stream: stream)
@@ -126,19 +150,6 @@ struct ShowsView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.7))
                         }
-                        
-//                        Rectangle()
-//                            .fill(Color.white.opacity(0.3))
-//                            .frame(width: 1, height: 40)
-                        
-//                        VStack(alignment: .center, spacing: 4) {
-//                            Text("\(apiService.currentPage)/\(apiService.totalPages)")
-//                                .font(.system(size: 20, weight: .bold))
-//                                .foregroundColor(.blue)
-//                            Text("Pages")
-//                                .font(.system(size: 12, weight: .medium))
-//                                .foregroundColor(.white.opacity(0.7))
-//                        }
                     }
                 }
                 .padding(.horizontal, 25)
@@ -193,7 +204,7 @@ struct ShowsView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 30) {
-                    ForEach(progressManager.getContinueWatchingVideos()) { progress in
+                    ForEach(Array(progressManager.getContinueWatchingVideos().enumerated()), id: \.element.id) { index, progress in
                         if let episode = findEpisode(by: progress.videoId) {
                             ContinueWatchingCard(
                                 videoData: convertEpisodeToVideoData(episode),
@@ -203,6 +214,30 @@ struct ShowsView: View {
                                 showingVideoPlayer = true
                             }
                             .environmentObject(apiService)
+                            .focused($continueWatchingFocused, equals: index)
+                            .onMoveCommand { direction in
+                                switch direction {
+                                case .up:
+                                    // Move back to navigation
+                                    continueWatchingFocused = nil
+                                case .down:
+                                    // Move to shows grid
+                                    continueWatchingFocused = nil
+                                    if !sortedShows.isEmpty {
+                                        focusedShow = sortedShows.first?.id.uuidString
+                                    }
+                                case .left:
+                                    if index > 0 {
+                                        continueWatchingFocused = index - 1
+                                    }
+                                case .right:
+                                    if index < progressManager.getContinueWatchingVideos().count - 1 {
+                                        continueWatchingFocused = index + 1
+                                    }
+                                default:
+                                    break
+                                }
+                            }
                         }
                     }
                 }
@@ -225,22 +260,6 @@ struct ShowsView: View {
                 }
                 
                 Spacer()
-                
-//                if apiService.hasMorePages {
-//                    HStack(spacing: 8) {
-//                        Image(systemName: "arrow.down.circle")
-//                            .font(.system(size: 16))
-//                            .foregroundColor(.blue)
-//                        
-//                        Text("Scroll for more")
-//                            .font(.system(size: 16, weight: .medium))
-//                            .foregroundColor(.white.opacity(0.6))
-//                    }
-//                } else {
-//                    Text("All shows loaded")
-//                        .font(.system(size: 16, weight: .medium))
-//                        .foregroundColor(.green.opacity(0.8))
-//                }
             }
             
             if apiService.isLoading && apiService.shows.isEmpty {
@@ -255,21 +274,94 @@ struct ShowsView: View {
                     }
                 }
             } else {
-                // All Shows Grid - 3 columns with actual data
+                // All Shows Grid with Fixed Navigation - 3 columns with actual data
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40),
                     GridItem(.flexible(), spacing: 40)
                 ], spacing: 40) {
-                    ForEach(apiService.shows.sorted { $0.episodeCount > $1.episodeCount }) { show in
-                        ShowGridCard(show: show) {
+                    ForEach(Array(sortedShows.enumerated()), id: \.element.id) { index, show in
+                        FixedNavigationShowGridCard(
+                            show: show,
+                            index: index,
+                            totalShows: totalShows,
+                            gridColumns: gridColumns,
+                            isFocused: focusedShow == show.id.uuidString,
+                            onNavigateUp: {
+                                handleGridNavigationUp(from: index)
+                            },
+                            onNavigateDown: {
+                                handleGridNavigationDown(from: index)
+                            },
+                            onNavigateLeft: {
+                                handleGridNavigationLeft(from: index)
+                            },
+                            onNavigateRight: {
+                                handleGridNavigationRight(from: index)
+                            }
+                        ) {
                             selectedShow = show
                             showingShowDetail = true
                         }
+                        .focused($focusedShow, equals: show.id.uuidString)
+                    }
+                }
+                .onAppear {
+                    // Set initial focus to first show if none is focused
+                    if focusedShow == nil && !sortedShows.isEmpty {
+                        focusedShow = sortedShows.first?.id.uuidString
                     }
                 }
             }
         }
+    }
+    
+    // MARK: - Grid Navigation Logic
+    
+    private func handleGridNavigationUp(from index: Int) {
+        // Only move to navigation/continue watching if we're in the top row (first 3 items)
+        if index < gridColumns {
+            // We're in the top row
+            focusedShow = nil
+            // Check if there's continue watching content
+            if !progressManager.getContinueWatchingVideos().isEmpty {
+                continueWatchingFocused = 0
+            }
+            // Otherwise, focus will go back to navigation (handled by parent)
+        } else {
+            // Move to the show above in the same column
+            let targetIndex = index - gridColumns
+            if targetIndex >= 0 && targetIndex < sortedShows.count {
+                focusedShow = sortedShows[targetIndex].id.uuidString
+            }
+        }
+    }
+    
+    private func handleGridNavigationDown(from index: Int) {
+        // Move to the show below in the same column
+        let targetIndex = index + gridColumns
+        if targetIndex < sortedShows.count {
+            focusedShow = sortedShows[targetIndex].id.uuidString
+        }
+        // If no show below, stay at current position
+    }
+    
+    private func handleGridNavigationLeft(from index: Int) {
+        // Move to the show on the left
+        if index % gridColumns > 0 {
+            let targetIndex = index - 1
+            focusedShow = sortedShows[targetIndex].id.uuidString
+        }
+        // If at leftmost column, stay at current position
+    }
+    
+    private func handleGridNavigationRight(from index: Int) {
+        // Move to the show on the right
+        if (index % gridColumns) < (gridColumns - 1) && (index + 1) < sortedShows.count {
+            let targetIndex = index + 1
+            focusedShow = sortedShows[targetIndex].id.uuidString
+        }
+        // If at rightmost column or no show to the right, stay at current position
     }
     
     private var loadMoreSection: some View {
@@ -339,22 +431,6 @@ struct ShowsView: View {
                 Spacer()
                 
                 VStack(spacing: 12) {
-//                    if !apiService.hasMorePages && !apiService.isLoading {
-//                        HStack(spacing: 8) {
-//                            Image(systemName: "checkmark.circle.fill")
-//                                .font(.system(size: 20))
-//                                .foregroundColor(.green)
-//                            
-//                            Text("All shows loaded!")
-//                                .font(.system(size: 18, weight: .semibold))
-//                                .foregroundColor(.white)
-//                        }
-//                        
-//                        Text("Showing all \(apiService.shows.count) shows across \(apiService.totalPages) pages")
-//                            .font(.system(size: 14, weight: .medium))
-//                            .foregroundColor(.white.opacity(0.7))
-//                    }
-                    
                     // Manual Load More Button (backup)
                     if apiService.hasMorePages && !apiService.isLoadingMoreShows {
                         Button(action: {
@@ -409,12 +485,18 @@ struct ShowsView: View {
     }
 }
 
-// MARK: - Show Grid Card Component (Enhanced)
-struct ShowGridCard: View {
+// MARK: - Fixed Navigation Show Grid Card Component
+struct FixedNavigationShowGridCard: View {
     let show: Show
+    let index: Int
+    let totalShows: Int
+    let gridColumns: Int
+    let isFocused: Bool
+    let onNavigateUp: () -> Void
+    let onNavigateDown: () -> Void
+    let onNavigateLeft: () -> Void
+    let onNavigateRight: () -> Void
     let action: () -> Void
-    @FocusState private var isFocused: Bool
-    @State private var isHovered = false
     
     var body: some View {
         Button(action: action) {
@@ -551,8 +633,21 @@ struct ShowGridCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
-        .focused($isFocused)
         .animation(.easeInOut(duration: 0.25), value: isFocused)
+        .onMoveCommand { direction in
+            switch direction {
+            case .up:
+                onNavigateUp()
+            case .down:
+                onNavigateDown()
+            case .left:
+                onNavigateLeft()
+            case .right:
+                onNavigateRight()
+            default:
+                break
+            }
+        }
     }
 }
 

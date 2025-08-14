@@ -6,6 +6,7 @@ struct NavigationBar: View {
     
     private let navItems = ["HOME", "ABOUT US", "ALL SHOWS", "INFO"]
     @FocusState var focusedItem: String?
+    @State private var shouldMaintainFocus = false
     
     var body: some View {
         HStack {
@@ -29,19 +30,13 @@ struct NavigationBar: View {
                         isSelected: selectedItem == item,
                         isFocused: focusedItem == item
                     ) {
+                        // When button is pressed, change page but maintain focus on navigation
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedItem = item
+                            shouldMaintainFocus = true
                         }
                     }
                     .focused($focusedItem, equals: item)
-                    .onChange(of: focusedItem) { newFocusedItem in
-                        // Automatically navigate when focus changes
-                        if let newItem = newFocusedItem, newItem != selectedItem {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                selectedItem = newItem
-                            }
-                        }
-                    }
                 }
             }
             .padding(.trailing, 60)
@@ -51,10 +46,45 @@ struct NavigationBar: View {
         .padding(.vertical, 25)
         .background(Color.black.opacity(0.95))
         .zIndex(1)
+        .onChange(of: focusedItem) { newFocusedItem in
+            // Only navigate when focus changes via remote control (not button press)
+            if let newItem = newFocusedItem, newItem != selectedItem && !shouldMaintainFocus {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    selectedItem = newItem
+                }
+            }
+            // Reset the maintain focus flag after processing
+            if shouldMaintainFocus {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    shouldMaintainFocus = false
+                }
+            }
+        }
         .onAppear {
             // Set initial focus to the selected item
             if focusedItem == nil {
                 focusedItem = selectedItem
+            }
+        }
+        .onMoveCommand { direction in
+            // Handle navigation movement but keep focus within navigation
+            switch direction {
+            case .left:
+                if let currentIndex = navItems.firstIndex(of: focusedItem ?? selectedItem),
+                   currentIndex > 0 {
+                    focusedItem = navItems[currentIndex - 1]
+                }
+            case .right:
+                if let currentIndex = navItems.firstIndex(of: focusedItem ?? selectedItem),
+                   currentIndex < navItems.count - 1 {
+                    focusedItem = navItems[currentIndex + 1]
+                }
+            case .down:
+                // Only move focus down to content when explicitly pressing down
+                // The content view will handle receiving focus
+                break
+            default:
+                break
             }
         }
     }

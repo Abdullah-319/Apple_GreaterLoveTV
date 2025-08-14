@@ -1,17 +1,18 @@
 import SwiftUI
 
-// MARK: - About View - Updated to match provided design
+// MARK: - About View - Fixed Focus Navigation
 struct AboutView: View {
     @State private var showingQRCodes = false
     
     // Focus states for navigation
     enum FocusableField: Hashable {
+        case aboutContent
         case contact
         case donate
     }
     
     @FocusState private var focusedField: FocusableField?
-
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -19,34 +20,45 @@ struct AboutView: View {
                 mainContentSection
                 bottomDonationSection
             }
-            .onMoveCommand(perform: handleMoveCommand)
         }
         .background(Color.black.opacity(0.95))
         .ignoresSafeArea(.all)
-        .onAppear {
-            focusedField = .contact
-        }
-        .sheet(isPresented: $showingQRCodes) {
-            QRCodesView()
+        .focusable()
+        .onMoveCommand { direction in
+            switch direction {
+            case .down:
+                if focusedField == nil {
+                    focusedField = .aboutContent
+                } else if focusedField == .aboutContent {
+                    focusedField = .contact
+                } else if focusedField == .contact {
+                    focusedField = .donate
+                }
+            case .up:
+                if focusedField == .donate {
+                    focusedField = .contact
+                } else if focusedField == .contact {
+                    focusedField = .aboutContent
+                } else if focusedField == .aboutContent {
+                    // Move back to navigation - will be handled by parent
+                    focusedField = nil
+                }
+            case .left:
+                if focusedField == .contact {
+                    focusedField = .aboutContent
+                } else if focusedField == .donate {
+                    focusedField = .aboutContent
+                }
+            case .right:
+                if focusedField == .aboutContent {
+                    focusedField = .contact
+                }
+            default:
+                break
+            }
         }
     }
     
-    private func handleMoveCommand(direction: MoveCommandDirection) {
-        guard direction == .up || direction == .down else { return }
-
-        if direction == .down {
-            if focusedField == .contact {
-                focusedField = .donate
-            }
-        }
-        
-        if direction == .up {
-            if focusedField == .donate {
-                focusedField = .contact
-            }
-        }
-    }
-
     private var topHeroSection: some View {
         ZStack {
             // Background image with proper overlay
@@ -87,6 +99,8 @@ struct AboutView: View {
                 Spacer()
             }
         }
+        .focusable() // Make the hero section focusable
+        .focused($focusedField, equals: .aboutContent)
     }
     
     private var mainContentSection: some View {
@@ -213,6 +227,9 @@ struct AboutView: View {
                 .animation(.easeInOut(duration: 0.1), value: focusedField)
             }
             .padding(.bottom, 80)
+        }
+        .sheet(isPresented: $showingQRCodes) {
+            QRCodesView()
         }
     }
 }
