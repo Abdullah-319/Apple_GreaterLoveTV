@@ -3,7 +3,7 @@ import Foundation
 import AVKit
 import UIKit
 
-// MARK: - Enhanced API Service with Pagination and Featured Content
+// MARK: - Enhanced API Service with Working Live Streams
 class CastrAPIService: ObservableObject {
     private let baseURL = "https://api.castr.com/v2"
     private let accessToken = "5aLoKjrNjly4"
@@ -66,6 +66,7 @@ class CastrAPIService: ObservableObject {
     }
     
     private func addStaticLiveStreams() {
+        // Updated live stream URLs with better HLS streams
         let channel1 = LiveStream(
             _id: "static_channel_1",
             name: "Greater Love TV Channel 1",
@@ -100,8 +101,26 @@ class CastrAPIService: ObservableObject {
             )
         )
         
+        // Add test streams for development
+        let testStream = LiveStream(
+            _id: "test_stream",
+            name: "Test HLS Stream",
+            enabled: true,
+            creation_time: "2025-01-01T00:00:00.000Z",
+            embed_url: nil,
+            hls_url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
+            thumbnail_url: nil,
+            broadcasting_status: "online",
+            ingest: nil,
+            playback: Playback(
+                hls_url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
+                embed_url: nil,
+                embed_audio_url: nil
+            )
+        )
+        
         DispatchQueue.main.async {
-            self.liveStreams = [channel1, channel2]
+            self.liveStreams = [channel1, channel2, testStream]
         }
     }
     
@@ -203,7 +222,9 @@ class CastrAPIService: ObservableObject {
                     
                     // Update backward compatibility properties
                     self?.videos = self?.shows ?? []
-                    self?.videoData = (self?.allEpisodes ?? []).map { self?.convertEpisodeToVideoData($0) ?? VideoData(dataId: "", fileName: "", enabled: false, bytes: 0, mediaInfo: nil, encodingRequired: false, precedence: 0, author: "", creationTime: "", _id: "", playback: nil) }.filter { !$0.fileName.isEmpty }
+                    self?.videoData = (self?.allEpisodes ?? []).compactMap { episode in
+                        return self?.convertEpisodeToVideoData(episode)
+                    }
                     
                     // Update collections and categories
                     self?.createShowCollections(from: self?.shows ?? [])
@@ -282,7 +303,7 @@ class CastrAPIService: ObservableObject {
             }
             
             if !ministerShows.isEmpty {
-                ministers[ministerName] = Array(ministerShows.prefix(3)) // Limit to 3 shows per minister
+                ministers[ministerName] = Array(ministerShows.prefix(3))
             }
         }
         
@@ -312,7 +333,7 @@ class CastrAPIService: ObservableObject {
             .prefix(limit))
     }
     
-    // MARK: - Live Streams
+    // MARK: - Live Streams with Enhanced Validation
     
     func fetchLiveStreams() {
         guard let url = URL(string: "\(baseURL)/live_streams") else {
@@ -347,7 +368,7 @@ class CastrAPIService: ObservableObject {
                 
                 do {
                     let streams = try JSONDecoder().decode([LiveStream].self, from: data)
-                    let apiStreams = streams.filter { $0.enabled }
+                    let apiStreams = streams.filter { $0.enabled && self?.isValidLiveStreamURL($0) == true }
                     self?.liveStreams.append(contentsOf: apiStreams)
                     print("Successfully loaded \(apiStreams.count) API live streams")
                 } catch {
@@ -357,7 +378,7 @@ class CastrAPIService: ObservableObject {
                             if let dataArray = jsonObject["data"] as? [[String: Any]] {
                                 let jsonData = try JSONSerialization.data(withJSONObject: dataArray)
                                 let streams = try JSONDecoder().decode([LiveStream].self, from: jsonData)
-                                let apiStreams = streams.filter { $0.enabled }
+                                let apiStreams = streams.filter { $0.enabled && self?.isValidLiveStreamURL($0) == true }
                                 self?.liveStreams.append(contentsOf: apiStreams)
                                 print("Successfully loaded \(apiStreams.count) API live streams from data array")
                             }
@@ -365,6 +386,52 @@ class CastrAPIService: ObservableObject {
                     } catch {
                         self?.handleError("Live Streams Parsing error: \(error.localizedDescription)")
                     }
+                }
+            }
+        }.resume()
+    }
+    
+    // MARK: - Live Stream URL Validation
+    
+    private func isValidLiveStreamURL(_ stream: LiveStream) -> Bool {
+        // Check if stream has valid HLS URL
+        if let hlsURL = stream.hls_url ?? stream.playback?.hls_url {
+            return hlsURL.contains(".m3u8") && (hlsURL.hasPrefix("http://") || hlsURL.hasPrefix("https://"))
+        }
+        
+        // Check if stream has valid embed URL
+        if let embedURL = stream.embed_url ?? stream.playback?.embed_url {
+            return embedURL.hasPrefix("http://") || embedURL.hasPrefix("https://")
+        }
+        
+        return false
+    }
+    
+    // MARK: - Stream URL Testing
+    
+    func testStreamURL(_ urlString: String, completion: @escaping (Bool, String?) -> Void) {
+        guard let url = URL(string: urlString) else {
+            completion(false, "Invalid URL format")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 10.0
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(false, "Network error: \(error.localizedDescription)")
+                    return
+                }
+                
+                if let httpResponse = response as? HTTPURLResponse {
+                    let isValid = (200...299).contains(httpResponse.statusCode)
+                    let message = isValid ? "Stream accessible" : "HTTP \(httpResponse.statusCode)"
+                    completion(isValid, message)
+                } else {
+                    completion(false, "Invalid response")
                 }
             }
         }.resume()
@@ -430,7 +497,7 @@ class CastrAPIService: ObservableObject {
     }
     
     // MARK: - Helper method to convert Episode to VideoData
-    private func convertEpisodeToVideoData(_ episode: Episode) -> VideoData {
+    func convertEpisodeToVideoData(_ episode: Episode) -> VideoData {
         return VideoData(
             dataId: episode.episodeId,
             fileName: episode.fileName,
@@ -741,29 +808,30 @@ extension CastrAPIService {
         
         return analytics
     }
-}
-
-// MARK: - Backward Compatibility Types
-struct VideoData: Codable, Identifiable {
-    let id = UUID()
-    let dataId: String
-    let fileName: String
-    let enabled: Bool
-    let bytes: Int
-    let mediaInfo: MediaInfo?
-    let encodingRequired: Bool
-    let precedence: Int
-    let author: String
-    let creationTime: String
-    let _id: String
-    let playback: VideoPlayback?
     
-    enum CodingKeys: String, CodingKey {
-        case dataId = "id", fileName, enabled, bytes, mediaInfo, encodingRequired, precedence, author, creationTime, _id, playback
+    // MARK: - Additional Helper Methods
+    
+    // Helper method to convert Show to legacy Video format if needed
+    func convertShowToLegacyVideo(_ show: Show) -> [VideoData] {
+        return show.episodes.map { episode in
+            convertEpisodeToVideoData(episode)
+        }
     }
-}
-
-struct VideoPlayback: Codable {
-    let embed_url: String?
-    let hls_url: String?
+    
+    // Get all videos in VideoData format for backward compatibility
+    func getAllVideoData() -> [VideoData] {
+        return allEpisodes.map { convertEpisodeToVideoData($0) }
+    }
+    
+    // Find episode by video data ID
+    func findEpisode(by videoDataId: String) -> Episode? {
+        return allEpisodes.first { $0._id == videoDataId }
+    }
+    
+    // Find show by episode ID
+    func findShow(containing episodeId: String) -> Show? {
+        return shows.first { show in
+            show.episodes.contains { $0._id == episodeId }
+        }
+    }
 }

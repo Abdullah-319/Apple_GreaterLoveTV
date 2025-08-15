@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Enhanced Home View with Featured Shows and Ministers
+// MARK: - Enhanced Home View with Fixed Live Streaming
 struct HomeView: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -8,6 +8,8 @@ struct HomeView: View {
     @State private var showingVideoPlayer = false
     @State private var selectedShow: Show?
     @State private var showingShowDetail = false
+    @State private var selectedLiveStream: LiveStream?
+    @State private var showingLivePlayer = false
     
     // Focus states for navigation - matching UI hierarchy
     @FocusState private var smartCTAFocused: Bool
@@ -44,10 +46,13 @@ struct HomeView: View {
                 smartCTAFocused = true
             }
         }
-        .sheet(isPresented: $showingVideoPlayer) {
-            if let stream = selectedContent as? LiveStream {
+        .sheet(isPresented: $showingLivePlayer) {
+            if let stream = selectedLiveStream {
                 LiveTVPlayerView(stream: stream)
-            } else if let episode = selectedContent as? Episode {
+            }
+        }
+        .sheet(isPresented: $showingVideoPlayer) {
+            if let episode = selectedContent as? Episode {
                 VideoDataPlayerView(videoData: convertEpisodeToVideoData(episode))
             } else if let videoData = selectedContent as? VideoData {
                 VideoDataPlayerView(videoData: videoData)
@@ -246,7 +251,7 @@ struct HomeView: View {
         }
     }
     
-    // MARK: - Live Streams Section
+    // MARK: - Live Streams Section with Fixed Navigation
     private var liveStreamsSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             HStack {
@@ -287,8 +292,9 @@ struct HomeView: View {
                             subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
                             imageName: index == 0 ? "GL_live_1" : "GL_live_2"
                         ) {
-                            selectedContent = stream
-                            showingVideoPlayer = true
+                            // Fixed: Use separate state for live stream player
+                            selectedLiveStream = stream
+                            showingLivePlayer = true
                         }
                         .focused($liveStreamsFocused, equals: index)
                         .onMoveCommand { direction in
@@ -507,7 +513,7 @@ struct FeaturedShowCard: View {
     }
 }
 
-// MARK: - Enhanced Live Stream Card with Custom Background Image and Immediate Playback
+// MARK: - Enhanced Live Stream Card with Fixed Streaming
 struct EnhancedLiveStreamCard: View {
     let stream: LiveStream
     let number: String

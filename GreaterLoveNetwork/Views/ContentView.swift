@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Content View with Enhanced Navigation and Featured Content
+// MARK: - Content View with Enhanced Navigation and Live Streaming Fix
 struct ContentView: View {
     @StateObject private var apiService = CastrAPIService()
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -148,7 +148,7 @@ struct NavigationBarWithProperFocus: View {
     }
 }
 
-// MARK: - Home View with Proper Navigation Flow
+// MARK: - Home View with Fixed Live Streaming Navigation
 struct HomeViewWithProperNavigation: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -156,6 +156,8 @@ struct HomeViewWithProperNavigation: View {
     @State private var showingVideoPlayer = false
     @State private var selectedShow: Show?
     @State private var showingShowDetail = false
+    @State private var selectedLiveStream: LiveStream?
+    @State private var showingLivePlayer = false
     
     // Focus states for proper navigation flow - matching UI hierarchy
     @FocusState private var smartCTAFocused: Bool
@@ -185,10 +187,14 @@ struct HomeViewWithProperNavigation: View {
             }
             .background(Color.black.opacity(0.8))
         }
-        .sheet(isPresented: $showingVideoPlayer) {
-            if let stream = selectedContent as? LiveStream {
+        // Fixed: Separated sheet presentations to avoid conflicts
+        .sheet(isPresented: $showingLivePlayer) {
+            if let stream = selectedLiveStream {
                 LiveTVPlayerView(stream: stream)
-            } else if let episode = selectedContent as? Episode {
+            }
+        }
+        .sheet(isPresented: $showingVideoPlayer) {
+            if let episode = selectedContent as? Episode {
                 VideoDataPlayerView(videoData: convertEpisodeToVideoData(episode))
             } else if let videoData = selectedContent as? VideoData {
                 VideoDataPlayerView(videoData: videoData)
@@ -431,8 +437,8 @@ struct HomeViewWithProperNavigation: View {
                             subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
                             imageName: index == 0 ? "GL_live_1" : "GL_live_2"
                         ) {
-                            selectedContent = stream
-                            showingVideoPlayer = true
+                            selectedLiveStream = stream
+                            showingLivePlayer = true
                         }
                         .focused($liveStreamsFocused, equals: index)
                         .onMoveCommand { direction in

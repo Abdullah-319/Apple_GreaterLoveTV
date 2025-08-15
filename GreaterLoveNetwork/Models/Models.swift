@@ -1,7 +1,7 @@
 import SwiftUI
 import Foundation
 
-// MARK: - Models
+// MARK: - Enhanced Models with Better Live Stream Support
 struct LiveStream: Codable, Identifiable {
     let id = UUID()
     let _id: String
@@ -17,6 +17,37 @@ struct LiveStream: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case _id, name, enabled, creation_time, embed_url, hls_url, thumbnail_url, broadcasting_status, ingest, playback
+    }
+    
+    // Computed properties for better stream handling
+    var isOnline: Bool {
+        return broadcasting_status?.lowercased() == "online"
+    }
+    
+    var bestStreamURL: String? {
+        // Prioritize HLS URLs for live streaming
+        if let hlsURL = hls_url ?? playback?.hls_url {
+            return hlsURL
+        }
+        
+        // Fallback to embed URL
+        return embed_url ?? playback?.embed_url
+    }
+    
+    var isValidForStreaming: Bool {
+        guard enabled else { return false }
+        return bestStreamURL != nil
+    }
+    
+    var statusColor: Color {
+        switch broadcasting_status?.lowercased() {
+        case "online":
+            return .red
+        case "offline":
+            return .gray
+        default:
+            return .orange
+        }
     }
 }
 
@@ -266,15 +297,6 @@ struct RecordingPlayback: Codable {
     let hls_url: String?
 }
 
-// MARK: - Category Model (for backward compatibility)
-struct Category: Identifiable {
-    let id = UUID()
-    let name: String
-    let image: String
-    let color: Color
-    let videos: [VideoData] // using VideoData for backward compatibility
-}
-
 // MARK: - API Response Models
 struct ShowsResponse: Codable { // renamed from VideosResponse
     let total: Int
@@ -301,8 +323,168 @@ enum ThumbnailState: Equatable {
 }
 
 // MARK: - Backward Compatibility Types
+struct VideoData: Codable, Identifiable {
+    let id = UUID()
+    let dataId: String
+    let fileName: String
+    let enabled: Bool
+    let bytes: Int
+    let mediaInfo: MediaInfo?
+    let encodingRequired: Bool
+    let precedence: Int
+    let author: String
+    let creationTime: String
+    let _id: String
+    let playback: VideoPlayback?
+    
+    enum CodingKeys: String, CodingKey {
+        case dataId = "id", fileName, enabled, bytes, mediaInfo, encodingRequired, precedence, author, creationTime, _id, playback
+    }
+    
+    // Helper initializer for creating from Episode
+    init(from episode: Episode) {
+        self.dataId = episode.episodeId
+        self.fileName = episode.fileName
+        self.enabled = episode.enabled
+        self.bytes = episode.bytes
+        self.mediaInfo = episode.mediaInfo
+        self.encodingRequired = episode.encodingRequired
+        self.precedence = episode.precedence
+        self.author = episode.author
+        self.creationTime = episode.creationTime
+        self._id = episode._id
+        self.playback = VideoPlayback(
+            embed_url: episode.playback?.embed_url,
+            hls_url: episode.playback?.hls_url
+        )
+    }
+    
+    // Default initializer
+    init(dataId: String, fileName: String, enabled: Bool, bytes: Int, mediaInfo: MediaInfo?, encodingRequired: Bool, precedence: Int, author: String, creationTime: String, _id: String, playback: VideoPlayback?) {
+        self.dataId = dataId
+        self.fileName = fileName
+        self.enabled = enabled
+        self.bytes = bytes
+        self.mediaInfo = mediaInfo
+        self.encodingRequired = encodingRequired
+        self.precedence = precedence
+        self.author = author
+        self.creationTime = creationTime
+        self._id = _id
+        self.playback = playback
+    }
+}
 
+struct VideoPlayback: Codable {
+    let embed_url: String?
+    let hls_url: String?
+    
+    init(embed_url: String?, hls_url: String?) {
+        self.embed_url = embed_url
+        self.hls_url = hls_url
+    }
+}
 
+struct Category: Identifiable {
+    let id = UUID()
+    let name: String
+    let image: String
+    let color: Color
+    let videos: [VideoData]
+    
+    init(name: String, image: String, color: Color, videos: [VideoData]) {
+        self.name = name
+        self.image = image
+        self.color = color
+        self.videos = videos
+    }
+}
+
+// MARK: - Stream Validation Extensions
+extension LiveStream {
+    func validateStreamURL() -> StreamValidationResult {
+        guard enabled else {
+            return .invalid("Stream is disabled")
+        }
+        
+        guard let urlString = bestStreamURL else {
+            return .invalid("No valid stream URL found")
+        }
+        
+        guard let url = URL(string: urlString) else {
+            return .invalid("Invalid URL format")
+        }
+        
+        // Check if it's an HLS stream
+        if urlString.contains(".m3u8") {
+            return .valid(.hls(url))
+        }
+        
+        // Check if it's an embed URL that might contain HLS
+        if urlString.contains("embed") || urlString.contains("iframe") {
+            return .valid(.embed(url))
+        }
+        
+        return .invalid("Unsupported stream format")
+    }
+}
+
+enum StreamValidationResult {
+    case valid(StreamType)
+    case invalid(String)
+}
+
+enum StreamType {
+    case hls(URL)
+    case embed(URL)
+    case mp4(URL)
+}
+
+// MARK: - HLS Stream Testing
+struct HLSStreamTester {
+    static func testStreamURL(_ urlString: String, completion: @escaping (Bool, String?) -> Void) {
+        guard let url = URL(string: urlString) else {
+            completion(false, "Invalid URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 10.0
+        
+        // Add headers for better compatibility
+        request.setValue("application/vnd.apple.mpegurl", forHTTPHeaderField: "Accept")
+        request.setValue("AVFoundation/1.0", forHTTPHeaderField: "User-Agent")
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(false, "Network error: \(error.localizedDescription)")
+                    return
+                }
+                
+                if let httpResponse = response as? HTTPURLResponse {
+                    let statusCode = httpResponse.statusCode
+                    let isValid = (200...299).contains(statusCode)
+                    
+                    if isValid {
+                        // Check content type for HLS
+                        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type")
+                        if contentType?.contains("mpegurl") == true || contentType?.contains("m3u8") == true {
+                            completion(true, "Valid HLS stream")
+                        } else {
+                            completion(true, "Stream accessible (HTTP \(statusCode))")
+                        }
+                    } else {
+                        completion(false, "HTTP \(statusCode)")
+                    }
+                } else {
+                    completion(false, "Invalid response")
+                }
+            }
+        }.resume()
+    }
+}
 
 // MARK: - DateFormatter Extension
 extension DateFormatter {
