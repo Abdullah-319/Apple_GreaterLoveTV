@@ -1,7 +1,7 @@
 import SwiftUI
 import Foundation
 
-// MARK: - Enhanced Models with Better Live Stream Support
+// MARK: - Models
 struct LiveStream: Codable, Identifiable {
     let id = UUID()
     let _id: String
@@ -19,11 +19,21 @@ struct LiveStream: Codable, Identifiable {
         case _id, name, enabled, creation_time, embed_url, hls_url, thumbnail_url, broadcasting_status, ingest, playback
     }
     
-    // Computed properties for better stream handling
-    var isOnline: Bool {
-        return broadcasting_status?.lowercased() == "online"
+    // Public initializer for programmatic creation
+    public init(_id: String, name: String, enabled: Bool, creation_time: String, embed_url: String?, hls_url: String?, thumbnail_url: String?, broadcasting_status: String?, ingest: Ingest?, playback: Playback?) {
+        self._id = _id
+        self.name = name
+        self.enabled = enabled
+        self.creation_time = creation_time
+        self.embed_url = embed_url
+        self.hls_url = hls_url
+        self.thumbnail_url = thumbnail_url
+        self.broadcasting_status = broadcasting_status
+        self.ingest = ingest
+        self.playback = playback
     }
     
+    // CRITICAL: This was missing in your current code
     var bestStreamURL: String? {
         // Prioritize HLS URLs for live streaming
         if let hlsURL = hls_url ?? playback?.hls_url {
@@ -32,6 +42,10 @@ struct LiveStream: Codable, Identifiable {
         
         // Fallback to embed URL
         return embed_url ?? playback?.embed_url
+    }
+    
+    var isOnline: Bool {
+        return broadcasting_status?.lowercased() == "online"
     }
     
     var isValidForStreaming: Bool {
@@ -54,12 +68,25 @@ struct LiveStream: Codable, Identifiable {
 struct Ingest: Codable {
     let server: String
     let key: String
+    
+    // Public initializer
+    public init(server: String, key: String) {
+        self.server = server
+        self.key = key
+    }
 }
 
 struct Playback: Codable {
     let hls_url: String?
     let embed_url: String?
     let embed_audio_url: String?
+    
+    // Public initializer
+    public init(hls_url: String?, embed_url: String?, embed_audio_url: String?) {
+        self.hls_url = hls_url
+        self.embed_url = embed_url
+        self.embed_audio_url = embed_audio_url
+    }
 }
 
 // MARK: - Show Model (renamed from Video)
@@ -75,6 +102,17 @@ struct Show: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case _id, name, enabled, type, creation_time, episodes = "data", user
+    }
+    
+    // Public initializer for programmatic creation
+    public init(_id: String, name: String, enabled: Bool, type: String, creation_time: String, episodes: [Episode], user: String) {
+        self._id = _id
+        self.name = name
+        self.enabled = enabled
+        self.type = type
+        self.creation_time = creation_time
+        self.episodes = episodes
+        self.user = user
     }
     
     // Computed properties for show organization
@@ -138,6 +176,39 @@ struct Episode: Codable, Identifiable {
         case episodeId = "id", fileName, enabled, bytes, mediaInfo, encodingRequired, precedence, author, creationTime, _id, playback
     }
     
+    // Public initializer for programmatic creation
+    public init(episodeId: String, fileName: String, enabled: Bool, bytes: Int, mediaInfo: MediaInfo?, encodingRequired: Bool, precedence: Int, author: String, creationTime: String, _id: String, playback: EpisodePlayback?) {
+        self.episodeId = episodeId
+        self.fileName = fileName
+        self.enabled = enabled
+        self.bytes = bytes
+        self.mediaInfo = mediaInfo
+        self.encodingRequired = encodingRequired
+        self.precedence = precedence
+        self.author = author
+        self.creationTime = creationTime
+        self._id = _id
+        self.playback = playback
+    }
+    
+    // Custom decoder to handle missing author field
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        episodeId = try container.decode(String.self, forKey: .episodeId)
+        fileName = try container.decode(String.self, forKey: .fileName)
+        enabled = try container.decode(Bool.self, forKey: .enabled)
+        bytes = try container.decode(Int.self, forKey: .bytes)
+        mediaInfo = try container.decodeIfPresent(MediaInfo.self, forKey: .mediaInfo)
+        encodingRequired = try container.decode(Bool.self, forKey: .encodingRequired)
+        precedence = try container.decode(Int.self, forKey: .precedence)
+        creationTime = try container.decode(String.self, forKey: .creationTime)
+        _id = try container.decode(String.self, forKey: ._id)
+        playback = try container.decodeIfPresent(EpisodePlayback.self, forKey: .playback)
+        
+        // Handle missing author field gracefully
+        author = try container.decodeIfPresent(String.self, forKey: .author) ?? "Unknown Author"
+    }
+    
     // Computed properties for episode organization
     var displayTitle: String {
         return fileName.replacingOccurrences(of: ".mp4", with: "")
@@ -182,16 +253,40 @@ struct MediaInfo: Codable {
     let fps: Int?
     let codecs: [Codec]
     let durationMins: Int
+    
+    // Public initializer
+    public init(hasAudioTrack: Bool, isVbr: Bool, duration: Int, width: Int, height: Int, fps: Int?, codecs: [Codec], durationMins: Int) {
+        self.hasAudioTrack = hasAudioTrack
+        self.isVbr = isVbr
+        self.duration = duration
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.codecs = codecs
+        self.durationMins = durationMins
+    }
 }
 
 struct Codec: Codable {
     let type: String
     let codec: String
+    
+    // Public initializer
+    public init(type: String, codec: String) {
+        self.type = type
+        self.codec = codec
+    }
 }
 
 struct EpisodePlayback: Codable { // renamed from VideoPlayback
     let embed_url: String?
     let hls_url: String?
+    
+    // Public initializer
+    public init(embed_url: String?, hls_url: String?) {
+        self.embed_url = embed_url
+        self.hls_url = hls_url
+    }
 }
 
 // MARK: - Show Category Enum
@@ -261,6 +356,12 @@ struct ShowCollection: Identifiable {
     let category: ShowCategory
     let shows: [Show]
     
+    // Public initializer
+    public init(category: ShowCategory, shows: [Show]) {
+        self.category = category
+        self.shows = shows
+    }
+    
     var displayTitle: String {
         return category.rawValue
     }
@@ -290,11 +391,47 @@ struct Recording: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case _id, videoFolderId, recordingId = "id", name, from, duration, bytes, status, creationTime, playback
     }
+    
+    // Public initializer
+    public init(_id: String?, videoFolderId: String?, recordingId: String?, name: String, from: Int?, duration: Int?, bytes: Int?, status: String?, creationTime: String?, playback: RecordingPlayback?) {
+        self._id = _id
+        self.videoFolderId = videoFolderId
+        self.recordingId = recordingId
+        self.name = name
+        self.from = from
+        self.duration = duration
+        self.bytes = bytes
+        self.status = status
+        self.creationTime = creationTime
+        self.playback = playback
+    }
 }
 
 struct RecordingPlayback: Codable {
     let embed_url: String?
     let hls_url: String?
+    
+    // Public initializer
+    public init(embed_url: String?, hls_url: String?) {
+        self.embed_url = embed_url
+        self.hls_url = hls_url
+    }
+}
+
+// MARK: - Category Model (for backward compatibility)
+struct Category: Identifiable {
+    let id = UUID()
+    let name: String
+    let image: String
+    let color: Color
+    let videos: [VideoData] // using VideoData for backward compatibility
+    
+    public init(name: String, image: String, color: Color, videos: [VideoData]) {
+        self.name = name
+        self.image = image
+        self.color = color
+        self.videos = videos
+    }
 }
 
 // MARK: - API Response Models
@@ -303,6 +440,14 @@ struct ShowsResponse: Codable { // renamed from VideosResponse
     let page: Int
     let pages: Int
     let docs: [Show] // renamed from Video
+    
+    // Public initializer
+    public init(total: Int, page: Int, pages: Int, docs: [Show]) {
+        self.total = total
+        self.page = page
+        self.pages = pages
+        self.docs = docs
+    }
 }
 
 enum ThumbnailState: Equatable {
@@ -342,7 +487,7 @@ struct VideoData: Codable, Identifiable {
     }
     
     // Helper initializer for creating from Episode
-    init(from episode: Episode) {
+    public init(from episode: Episode) {
         self.dataId = episode.episodeId
         self.fileName = episode.fileName
         self.enabled = episode.enabled
@@ -360,7 +505,7 @@ struct VideoData: Codable, Identifiable {
     }
     
     // Default initializer
-    init(dataId: String, fileName: String, enabled: Bool, bytes: Int, mediaInfo: MediaInfo?, encodingRequired: Bool, precedence: Int, author: String, creationTime: String, _id: String, playback: VideoPlayback?) {
+    public init(dataId: String, fileName: String, enabled: Bool, bytes: Int, mediaInfo: MediaInfo?, encodingRequired: Bool, precedence: Int, author: String, creationTime: String, _id: String, playback: VideoPlayback?) {
         self.dataId = dataId
         self.fileName = fileName
         self.enabled = enabled
@@ -379,110 +524,9 @@ struct VideoPlayback: Codable {
     let embed_url: String?
     let hls_url: String?
     
-    init(embed_url: String?, hls_url: String?) {
+    public init(embed_url: String?, hls_url: String?) {
         self.embed_url = embed_url
         self.hls_url = hls_url
-    }
-}
-
-struct Category: Identifiable {
-    let id = UUID()
-    let name: String
-    let image: String
-    let color: Color
-    let videos: [VideoData]
-    
-    init(name: String, image: String, color: Color, videos: [VideoData]) {
-        self.name = name
-        self.image = image
-        self.color = color
-        self.videos = videos
-    }
-}
-
-// MARK: - Stream Validation Extensions
-extension LiveStream {
-    func validateStreamURL() -> StreamValidationResult {
-        guard enabled else {
-            return .invalid("Stream is disabled")
-        }
-        
-        guard let urlString = bestStreamURL else {
-            return .invalid("No valid stream URL found")
-        }
-        
-        guard let url = URL(string: urlString) else {
-            return .invalid("Invalid URL format")
-        }
-        
-        // Check if it's an HLS stream
-        if urlString.contains(".m3u8") {
-            return .valid(.hls(url))
-        }
-        
-        // Check if it's an embed URL that might contain HLS
-        if urlString.contains("embed") || urlString.contains("iframe") {
-            return .valid(.embed(url))
-        }
-        
-        return .invalid("Unsupported stream format")
-    }
-}
-
-enum StreamValidationResult {
-    case valid(StreamType)
-    case invalid(String)
-}
-
-enum StreamType {
-    case hls(URL)
-    case embed(URL)
-    case mp4(URL)
-}
-
-// MARK: - HLS Stream Testing
-struct HLSStreamTester {
-    static func testStreamURL(_ urlString: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let url = URL(string: urlString) else {
-            completion(false, "Invalid URL")
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
-        request.timeoutInterval = 10.0
-        
-        // Add headers for better compatibility
-        request.setValue("application/vnd.apple.mpegurl", forHTTPHeaderField: "Accept")
-        request.setValue("AVFoundation/1.0", forHTTPHeaderField: "User-Agent")
-        
-        URLSession.shared.dataTask(with: request) { _, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    completion(false, "Network error: \(error.localizedDescription)")
-                    return
-                }
-                
-                if let httpResponse = response as? HTTPURLResponse {
-                    let statusCode = httpResponse.statusCode
-                    let isValid = (200...299).contains(statusCode)
-                    
-                    if isValid {
-                        // Check content type for HLS
-                        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type")
-                        if contentType?.contains("mpegurl") == true || contentType?.contains("m3u8") == true {
-                            completion(true, "Valid HLS stream")
-                        } else {
-                            completion(true, "Stream accessible (HTTP \(statusCode))")
-                        }
-                    } else {
-                        completion(false, "HTTP \(statusCode)")
-                    }
-                } else {
-                    completion(false, "Invalid response")
-                }
-            }
-        }.resume()
     }
 }
 

@@ -3,16 +3,16 @@ import Foundation
 import AVKit
 import UIKit
 
-// MARK: - Enhanced API Service with Working Live Streams
+// MARK: - Enhanced API Service for Shows and Episodes (Working Version)
 class CastrAPIService: ObservableObject {
     private let baseURL = "https://api.castr.com/v2"
     private let accessToken = "5aLoKjrNjly4"
     private let secretKey = "UjTCq8wOj76vjXznGFzdbMRzAkFq6VlJElBQ"
     
     @Published var liveStreams: [LiveStream] = []
-    @Published var shows: [Show] = []
-    @Published var allEpisodes: [Episode] = []
-    @Published var showCollections: [ShowCollection] = []
+    @Published var shows: [Show] = [] // renamed from videos
+    @Published var allEpisodes: [Episode] = [] // renamed from videoData
+    @Published var showCollections: [ShowCollection] = [] // renamed from categories
     @Published var recordings: [Recording] = []
     @Published var featuredShows: [Show] = []
     @Published var featuredMinisters: [String: [Show]] = [:]
@@ -26,30 +26,10 @@ class CastrAPIService: ObservableObject {
     @Published var totalPages = 1
     @Published var hasMorePages = false
     
-    // Backward compatibility properties
+    // Backward compatibility properties - FIXED TYPES
     @Published var videos: [Show] = []
-    @Published var videoData: [VideoData] = []
+    @Published var videoData: [VideoData] = [] // FIXED: Changed from [Episode] to [VideoData]
     @Published var categories: [Category] = []
-    
-    // Featured content configuration
-    private let featuredShowNames = [
-        "Created to Praise",
-        "CT Townsend",
-        "Redemption Today",
-        "Mountain West Church",
-        "Manna-Fest",
-        "Pace Assembly"
-    ]
-    
-    private let featuredMinisterNames = [
-        "Tim Hill",
-        "CT Townsend",
-        "Brandon Porter",
-        "Todd Hoskins",
-        "Mo Huggins",
-        "Perry Stone",
-        "Joey Rogers"
-    ]
     
     private var authHeader: String {
         let credentials = "\(accessToken):\(secretKey)"
@@ -60,13 +40,13 @@ class CastrAPIService: ObservableObject {
     
     func fetchAllContent() {
         testAuthentication()
-        addStaticLiveStreams()
+        addStaticLiveStreams() // Use the exact working method name
         fetchAllShowsWithPagination()
         fetchLiveStreams()
     }
     
     private func addStaticLiveStreams() {
-        // Updated live stream URLs with better HLS streams
+        // Use the EXACT working stream URLs
         let channel1 = LiveStream(
             _id: "static_channel_1",
             name: "Greater Love TV Channel 1",
@@ -101,26 +81,16 @@ class CastrAPIService: ObservableObject {
             )
         )
         
-        // Add test streams for development
-        let testStream = LiveStream(
-            _id: "test_stream",
-            name: "Test HLS Stream",
-            enabled: true,
-            creation_time: "2025-01-01T00:00:00.000Z",
-            embed_url: nil,
-            hls_url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
-            thumbnail_url: nil,
-            broadcasting_status: "online",
-            ingest: nil,
-            playback: Playback(
-                hls_url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
-                embed_url: nil,
-                embed_audio_url: nil
-            )
-        )
-        
         DispatchQueue.main.async {
-            self.liveStreams = [channel1, channel2, testStream]
+            self.liveStreams = [channel1, channel2]
+            print("Added working live streams: \(self.liveStreams.count)")
+            
+            // Debug: Print the URLs being used
+            for stream in self.liveStreams {
+                print("Stream: \(stream.name)")
+                print("HLS URL: \(stream.hls_url ?? "None")")
+                print("Best Stream URL: \(stream.bestStreamURL ?? "None")")
+            }
         }
     }
     
@@ -187,10 +157,6 @@ class CastrAPIService: ObservableObject {
                     return
                 }
                 
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("API Response Page \(page): \(jsonString.prefix(500))...")
-                }
-                
                 do {
                     let response = try JSONDecoder().decode(ShowsResponse.self, from: data)
                     
@@ -211,7 +177,8 @@ class CastrAPIService: ObservableObject {
                     // Process episodes
                     var pageEpisodes: [Episode] = []
                     for show in enabledShows {
-                        pageEpisodes.append(contentsOf: show.episodes.filter { $0.enabled })
+                        let enabledEpisodes = show.episodes.filter { $0.enabled }
+                        pageEpisodes.append(contentsOf: enabledEpisodes)
                     }
                     
                     if isInitialLoad {
@@ -220,7 +187,7 @@ class CastrAPIService: ObservableObject {
                         self?.allEpisodes.append(contentsOf: pageEpisodes)
                     }
                     
-                    // Update backward compatibility properties
+                    // Update backward compatibility properties - FIXED CONVERSION
                     self?.videos = self?.shows ?? []
                     self?.videoData = (self?.allEpisodes ?? []).compactMap { episode in
                         return self?.convertEpisodeToVideoData(episode)
@@ -241,15 +208,6 @@ class CastrAPIService: ObservableObject {
                     }
                     
                     print("Successfully loaded page \(page): \(enabledShows.count) shows, \(pageEpisodes.count) episodes")
-                    print("Total shows: \(self?.shows.count ?? 0), Total episodes: \(self?.allEpisodes.count ?? 0)")
-                    print("Has more pages: \(self?.hasMorePages ?? false)")
-                    
-                    // Automatically load more pages in background for better UX
-                    if isInitialLoad && (self?.hasMorePages ?? false) && page < 3 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            self?.loadMoreShows()
-                        }
-                    }
                     
                 } catch {
                     print("Shows Decoding error: \(error)")
@@ -265,6 +223,24 @@ class CastrAPIService: ObservableObject {
     }
     
     // MARK: - Featured Content Processing
+    
+    private let featuredShowNames = [
+        "CT Townsend",
+        "Truth Matters",
+        "Sandra Hancock Ministries",
+        "Ignited Church",
+        "Fresh Oil",
+        "Grace Pointe Church"
+    ]
+    
+    private let featuredMinisterNames = [
+        "CT Townsend",
+        "Sandra Hancock",
+        "Angel Martinez",
+        "Kaylen Smith",
+        "Tim Johnson",
+        "Mark Davis"
+    ]
     
     private func processFeaturedContent() {
         // Process featured shows by name
@@ -313,28 +289,6 @@ class CastrAPIService: ObservableObject {
         print("Featured Ministers: \(featuredMinisters.keys.sorted())")
     }
     
-    // MARK: - Featured Content Getters
-    
-    func getFeaturedShows(limit: Int = 6) -> [Show] {
-        return Array(featuredShows.prefix(limit))
-    }
-    
-    func getFeaturedMinisters() -> [String: [Show]] {
-        return featuredMinisters
-    }
-    
-    func getShowsByMinister(_ ministerName: String) -> [Show] {
-        return featuredMinisters[ministerName] ?? []
-    }
-    
-    func getTopFeaturedMinisters(limit: Int = 6) -> [(String, [Show])] {
-        return Array(featuredMinisters
-            .sorted { $0.value.count > $1.value.count }
-            .prefix(limit))
-    }
-    
-    // MARK: - Live Streams with Enhanced Validation
-    
     func fetchLiveStreams() {
         guard let url = URL(string: "\(baseURL)/live_streams") else {
             handleError("Invalid live streams URL")
@@ -349,26 +303,26 @@ class CastrAPIService: ObservableObject {
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    self?.handleError("Live Streams Network Error: \(error.localizedDescription)")
+                    print("Live Streams Network Error: \(error.localizedDescription)")
                     return
                 }
                 
                 if let httpResponse = response as? HTTPURLResponse {
                     print("Live Streams HTTP Status Code: \(httpResponse.statusCode)")
                     if httpResponse.statusCode == 401 {
-                        self?.handleError("Live Streams Authentication failed.")
+                        print("Live Streams Authentication failed.")
                         return
                     }
                 }
                 
                 guard let data = data else {
-                    self?.handleError("No live streams data received")
+                    print("No live streams data received")
                     return
                 }
                 
                 do {
                     let streams = try JSONDecoder().decode([LiveStream].self, from: data)
-                    let apiStreams = streams.filter { $0.enabled && self?.isValidLiveStreamURL($0) == true }
+                    let apiStreams = streams.filter { $0.enabled }
                     self?.liveStreams.append(contentsOf: apiStreams)
                     print("Successfully loaded \(apiStreams.count) API live streams")
                 } catch {
@@ -378,60 +332,14 @@ class CastrAPIService: ObservableObject {
                             if let dataArray = jsonObject["data"] as? [[String: Any]] {
                                 let jsonData = try JSONSerialization.data(withJSONObject: dataArray)
                                 let streams = try JSONDecoder().decode([LiveStream].self, from: jsonData)
-                                let apiStreams = streams.filter { $0.enabled && self?.isValidLiveStreamURL($0) == true }
+                                let apiStreams = streams.filter { $0.enabled }
                                 self?.liveStreams.append(contentsOf: apiStreams)
                                 print("Successfully loaded \(apiStreams.count) API live streams from data array")
                             }
                         }
                     } catch {
-                        self?.handleError("Live Streams Parsing error: \(error.localizedDescription)")
+                        print("Live Streams Parsing error: \(error.localizedDescription)")
                     }
-                }
-            }
-        }.resume()
-    }
-    
-    // MARK: - Live Stream URL Validation
-    
-    private func isValidLiveStreamURL(_ stream: LiveStream) -> Bool {
-        // Check if stream has valid HLS URL
-        if let hlsURL = stream.hls_url ?? stream.playback?.hls_url {
-            return hlsURL.contains(".m3u8") && (hlsURL.hasPrefix("http://") || hlsURL.hasPrefix("https://"))
-        }
-        
-        // Check if stream has valid embed URL
-        if let embedURL = stream.embed_url ?? stream.playback?.embed_url {
-            return embedURL.hasPrefix("http://") || embedURL.hasPrefix("https://")
-        }
-        
-        return false
-    }
-    
-    // MARK: - Stream URL Testing
-    
-    func testStreamURL(_ urlString: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let url = URL(string: urlString) else {
-            completion(false, "Invalid URL format")
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
-        request.timeoutInterval = 10.0
-        
-        URLSession.shared.dataTask(with: request) { _, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    completion(false, "Network error: \(error.localizedDescription)")
-                    return
-                }
-                
-                if let httpResponse = response as? HTTPURLResponse {
-                    let isValid = (200...299).contains(httpResponse.statusCode)
-                    let message = isValid ? "Stream accessible" : "HTTP \(httpResponse.statusCode)"
-                    completion(isValid, message)
-                } else {
-                    completion(false, "Invalid response")
                 }
             }
         }.resume()
@@ -444,9 +352,7 @@ class CastrAPIService: ObservableObject {
         print("Error: \(message)")
     }
     
-    // MARK: - Thumbnail Loading
-    
-    func loadThumbnail(for episode: Episode) {
+    func loadThumbnail(for episode: Episode) { // updated parameter type
         // Set loading state
         DispatchQueue.main.async {
             self.thumbnailStates[episode._id] = .loading
@@ -477,6 +383,7 @@ class CastrAPIService: ObservableObject {
     
     // Backward compatibility method
     func loadThumbnail(for videoData: VideoData) {
+        // Convert VideoData to Episode for processing
         let episode = Episode(
             episodeId: videoData.dataId,
             fileName: videoData.fileName,
@@ -515,8 +422,6 @@ class CastrAPIService: ObservableObject {
             )
         )
     }
-    
-    // MARK: - URL Extraction Methods
     
     func extractMP4URL(from embedURL: String, completion: @escaping (String?) -> Void) {
         guard let url = URL(string: embedURL) else {
@@ -639,6 +544,91 @@ class CastrAPIService: ObservableObject {
             }
         }
     }
+    
+    // MARK: - Featured Content Getters
+    
+    func getFeaturedShows(limit: Int = 6) -> [Show] {
+        return Array(featuredShows.prefix(limit))
+    }
+    
+    func getFeaturedMinisters() -> [String: [Show]] {
+        return featuredMinisters
+    }
+    
+    func getShowsByMinister(_ ministerName: String) -> [Show] {
+        return featuredMinisters[ministerName] ?? []
+    }
+    
+    func getTopFeaturedMinisters(limit: Int = 6) -> [(String, [Show])] {
+        return Array(featuredMinisters
+            .sorted { $0.value.count > $1.value.count }
+            .prefix(limit))
+    }
+    
+    // MARK: - Search and Filter Methods
+    
+    func searchShows(query: String) -> [Show] {
+        let lowercaseQuery = query.lowercased()
+        
+        return shows.filter { show in
+            show.displayName.lowercased().contains(lowercaseQuery) ||
+            show.showCategory.rawValue.lowercased().contains(lowercaseQuery)
+        }.sorted { show1, show2 in
+            // Prioritize exact matches, then by episode count
+            let name1 = show1.displayName.lowercased()
+            let name2 = show2.displayName.lowercased()
+            
+            if name1.hasPrefix(lowercaseQuery) && !name2.hasPrefix(lowercaseQuery) {
+                return true
+            } else if !name1.hasPrefix(lowercaseQuery) && name2.hasPrefix(lowercaseQuery) {
+                return false
+            } else {
+                return show1.episodeCount > show2.episodeCount
+            }
+        }
+    }
+    
+    func searchEpisodes(query: String) -> [Episode] {
+        let lowercaseQuery = query.lowercased()
+        
+        return allEpisodes.filter { episode in
+            episode.displayTitle.lowercased().contains(lowercaseQuery) ||
+            episode.author.lowercased().contains(lowercaseQuery)
+        }.sorted { episode1, episode2 in
+            let dateFormatter = ISO8601DateFormatter()
+            let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
+            let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
+            return date1 > date2
+        }
+    }
+    
+    func getShowsFromCategory(_ category: ShowCategory) -> [Show] {
+        return showCollections.first { $0.category == category }?.shows ?? []
+    }
+    
+    func getRecentEpisodes(limit: Int = 10) -> [Episode] {
+        return allEpisodes
+            .sorted { episode1, episode2 in
+                let dateFormatter = ISO8601DateFormatter()
+                let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
+                let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
+                return date1 > date2
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+    
+    // Find episode by video data ID
+    func findEpisode(by videoDataId: String) -> Episode? {
+        return allEpisodes.first { $0._id == videoDataId }
+    }
+    
+    // Find show by episode ID
+    func findShow(containing episodeId: String) -> Show? {
+        return shows.first { show in
+            show.episodes.contains { $0._id == episodeId }
+        }
+    }
 }
 
 // MARK: - CastrAPIService Extension for Show Collections
@@ -729,109 +719,5 @@ extension CastrAPIService {
         }
         
         self.categories = categories
-    }
-    
-    // MARK: - Search and Filter Methods
-    
-    func searchShows(query: String) -> [Show] {
-        let lowercaseQuery = query.lowercased()
-        
-        return shows.filter { show in
-            show.displayName.lowercased().contains(lowercaseQuery) ||
-            show.showCategory.rawValue.lowercased().contains(lowercaseQuery)
-        }.sorted { show1, show2 in
-            // Prioritize exact matches, then by episode count
-            let name1 = show1.displayName.lowercased()
-            let name2 = show2.displayName.lowercased()
-            
-            if name1.hasPrefix(lowercaseQuery) && !name2.hasPrefix(lowercaseQuery) {
-                return true
-            } else if !name1.hasPrefix(lowercaseQuery) && name2.hasPrefix(lowercaseQuery) {
-                return false
-            } else {
-                return show1.episodeCount > show2.episodeCount
-            }
-        }
-    }
-    
-    func searchEpisodes(query: String) -> [Episode] {
-        let lowercaseQuery = query.lowercased()
-        
-        return allEpisodes.filter { episode in
-            episode.displayTitle.lowercased().contains(lowercaseQuery) ||
-            episode.author.lowercased().contains(lowercaseQuery)
-        }.sorted { episode1, episode2 in
-            let dateFormatter = ISO8601DateFormatter()
-            let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
-            let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
-            return date1 > date2
-        }
-    }
-    
-    func getShowsFromCategory(_ category: ShowCategory) -> [Show] {
-        return showCollections.first { $0.category == category }?.shows ?? []
-    }
-    
-    func getRecentEpisodes(limit: Int = 10) -> [Episode] {
-        return allEpisodes
-            .sorted { episode1, episode2 in
-                let dateFormatter = ISO8601DateFormatter()
-                let date1 = dateFormatter.date(from: episode1.creationTime) ?? Date.distantPast
-                let date2 = dateFormatter.date(from: episode2.creationTime) ?? Date.distantPast
-                return date1 > date2
-            }
-            .prefix(limit)
-            .map { $0 }
-    }
-    
-    // MARK: - Analytics Methods
-    
-    func getShowAnalytics() -> [String: Any] {
-        var analytics: [String: Any] = [:]
-        
-        analytics["total_shows"] = shows.count
-        analytics["total_episodes"] = allEpisodes.count
-        analytics["total_collections"] = showCollections.count
-        analytics["current_page"] = currentPage
-        analytics["total_pages"] = totalPages
-        analytics["has_more_pages"] = hasMorePages
-        analytics["featured_shows_count"] = featuredShows.count
-        analytics["featured_ministers_count"] = featuredMinisters.count
-        analytics["average_episodes_per_show"] = shows.isEmpty ? 0 : allEpisodes.count / shows.count
-        
-        let showEpisodeCounts = shows.map { ($0.displayName, $0.episodeCount) }
-        analytics["show_with_most_episodes"] = showEpisodeCounts.max { $0.1 < $1.1 }
-        analytics["show_with_least_episodes"] = showEpisodeCounts.min { $0.1 < $1.1 }
-        
-        let collectionSizes = showCollections.map { ($0.displayTitle, $0.totalEpisodes) }
-        analytics["largest_collection"] = collectionSizes.max { $0.1 < $1.1 }
-        
-        return analytics
-    }
-    
-    // MARK: - Additional Helper Methods
-    
-    // Helper method to convert Show to legacy Video format if needed
-    func convertShowToLegacyVideo(_ show: Show) -> [VideoData] {
-        return show.episodes.map { episode in
-            convertEpisodeToVideoData(episode)
-        }
-    }
-    
-    // Get all videos in VideoData format for backward compatibility
-    func getAllVideoData() -> [VideoData] {
-        return allEpisodes.map { convertEpisodeToVideoData($0) }
-    }
-    
-    // Find episode by video data ID
-    func findEpisode(by videoDataId: String) -> Episode? {
-        return allEpisodes.first { $0._id == videoDataId }
-    }
-    
-    // Find show by episode ID
-    func findShow(containing episodeId: String) -> Show? {
-        return shows.first { show in
-            show.episodes.contains { $0._id == episodeId }
-        }
     }
 }

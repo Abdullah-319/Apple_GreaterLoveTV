@@ -1,10 +1,11 @@
 import SwiftUI
 import AVKit
 
-// MARK: - Enhanced Video Player with Continue Watching Support
+// MARK: - Enhanced Video Player with Continue Watching Support (Fixed)
 struct VideoDataPlayerView: View {
     let videoData: VideoData
     @StateObject private var progressManager = WatchProgressManager.shared
+    @EnvironmentObject var apiService: CastrAPIService
     @State private var player: AVPlayer?
     @State private var mp4URL: String?
     @State private var isLoadingVideo = true
@@ -19,6 +20,7 @@ struct VideoDataPlayerView: View {
     @State private var showResumePrompt = false
     @State private var savedProgress: WatchProgress?
     @State private var hasAppeared = false
+    @State private var showName: String?
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -41,6 +43,7 @@ struct VideoDataPlayerView: View {
         .onAppear {
             if !hasAppeared {
                 hasAppeared = true
+                findShowForVideo()
                 checkForSavedProgress()
                 loadVideoURL()
                 startControlsTimer()
@@ -50,6 +53,41 @@ struct VideoDataPlayerView: View {
             saveCurrentProgress()
             controlsTimer?.invalidate()
             cleanupPlayer()
+        }
+    }
+    
+    // MARK: - Find Show Name for Better Progress Tracking
+    
+    private func findShowForVideo() {
+        // Find the show that contains this episode
+        if let show = apiService.findShow(containing: videoData._id) {
+            showName = show.displayName
+            print("Found show for video: \(show.displayName)")
+        } else {
+            // Fallback: try to extract show name from filename
+            let filename = videoData.fileName.replacingOccurrences(of: ".mp4", with: "")
+            
+            // Common patterns to extract show names
+            let showPatterns = [
+                "CT Townsend",
+                "Truth Matters",
+                "Sandra Hancock",
+                "Ignited Church",
+                "Fresh Oil",
+                "Grace Pointe",
+                "Evangelistic",
+                "Higher Praise",
+                "Second Chances"
+            ]
+            
+            for pattern in showPatterns {
+                if filename.lowercased().contains(pattern.lowercased()) {
+                    showName = pattern
+                    break
+                }
+            }
+            
+            print("Extracted show name from filename: \(showName ?? "Unknown")")
         }
     }
     
@@ -65,7 +103,7 @@ struct VideoDataPlayerView: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white)
             
-            Text(videoData.fileName)
+            Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
                 .font(.system(size: 16))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -83,21 +121,30 @@ struct VideoDataPlayerView: View {
                 .font(.system(size: 24, weight: .medium))
                 .foregroundColor(.gray)
             
-            Text(videoData.fileName)
+            Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
-            Text("The video content is currently unavailable or the embed URL is missing.")
+            Text("The video content is currently unavailable or the URL could not be extracted.")
                 .font(.system(size: 16))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 60)
             
-            CTAButton(title: "Back") {
+            Button(action: {
                 presentationMode.wrappedValue.dismiss()
+            }) {
+                Text("Back")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 30)
+                    .padding(.vertical, 12)
+                    .background(Color.red)
+                    .cornerRadius(8)
             }
+            .buttonStyle(PlainButtonStyle())
         }
     }
     
@@ -140,10 +187,23 @@ struct VideoDataPlayerView: View {
         VStack {
             // Top Controls
             HStack {
-                CTAButton(title: "Back") {
+                Button(action: {
                     saveCurrentProgress()
                     presentationMode.wrappedValue.dismiss()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Back")
+                            .font(.system(size: 18, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(12)
                 }
+                .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
@@ -151,9 +211,20 @@ struct VideoDataPlayerView: View {
                     Text(videoData.fileName.replacingOccurrences(of: ".mp4", with: ""))
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.trailing)
                     
                     HStack(spacing: 4) {
+                        if let showName = showName {
+                            Text(showName)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.blue)
+                            
+                            Text("•")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        
                         if let duration = videoData.mediaInfo?.durationMins {
                             Text("\(duration) min")
                                 .font(.system(size: 14, weight: .medium))
@@ -271,6 +342,12 @@ struct VideoDataPlayerView: View {
                     Text("\(Int(progress.progressPercentage))% completed")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.orange)
+                    
+                    if let showName = progress.showName {
+                        Text("from \(showName)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
                 }
                 
                 HStack(spacing: 30) {
@@ -308,7 +385,7 @@ struct VideoDataPlayerView: View {
         }
     }
     
-    // MARK: - Continue Watching Logic
+    // MARK: - Continue Watching Logic with Enhanced Show Tracking
     
     private func checkForSavedProgress() {
         savedProgress = progressManager.getProgress(for: videoData._id)
@@ -350,12 +427,19 @@ struct VideoDataPlayerView: View {
     private func saveCurrentProgress() {
         guard duration > 0 && currentTime > 0 else { return }
         
-        let videoTitle = videoData.fileName.replacingOccurrences(of: ".mp4", with: "")
+        let episodeTitle = videoData.fileName.replacingOccurrences(of: ".mp4", with: "")
+        
+        print("Saving progress for episode: \(episodeTitle)")
+        print("Show name: \(showName ?? "Unknown")")
+        print("Current time: \(currentTime), Duration: \(duration)")
+        
+        // Use the enhanced progress manager with show name
         progressManager.updateProgress(
             for: videoData._id,
             currentTime: currentTime,
             duration: duration,
-            videoTitle: videoTitle
+            episodeTitle: episodeTitle,
+            showName: showName
         )
     }
     
@@ -364,63 +448,75 @@ struct VideoDataPlayerView: View {
     private func setupPlayer(with url: URL) {
         guard player == nil else { return }
         
+        print("Setting up player with URL: \(url)")
+        
         let playerItem = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: playerItem)
         
-        // Ensure player is ready before proceeding
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            // Setup buffering observation
-            NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemPlaybackStalled,
-                object: playerItem,
-                queue: .main
-            ) { _ in
-                self.isBuffering = true
-            }
-            
-            // Setup time observation
-            self.playerTimeObserver = self.player?.addPeriodicTimeObserver(
-                forInterval: CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
-                queue: .main
-            ) { time in
-                DispatchQueue.main.async {
-                    guard let player = self.player else { return }
+        // Configure player for better video playback
+        player?.automaticallyWaitsToMinimizeStalling = true
+        player?.allowsExternalPlayback = true
+        
+        // Setup buffering observation
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: playerItem,
+            queue: .main
+        ) { _ in
+            self.isBuffering = true
+        }
+        
+        // Setup ready to play observation
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemNewAccessLogEntry,
+            object: playerItem,
+            queue: .main
+        ) { _ in
+            self.isBuffering = false
+        }
+        
+        // Setup time observation
+        self.playerTimeObserver = self.player?.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
+            queue: .main
+        ) { time in
+            DispatchQueue.main.async {
+                guard let player = self.player else { return }
+                
+                self.currentTime = time.seconds
+                if let duration = player.currentItem?.duration.seconds, !duration.isNaN {
+                    self.duration = duration
                     
-                    self.currentTime = time.seconds
-                    if let duration = player.currentItem?.duration.seconds, !duration.isNaN {
-                        self.duration = duration
-                        
-                        // Auto-resume if we have saved progress and haven't resumed yet
-                        if !self.hasResumedFromProgress, let progress = self.savedProgress, !self.showResumePrompt {
-                            let cmTime = CMTime(seconds: progress.currentTime, preferredTimescale: 1)
-                            player.seek(to: cmTime)
-                            self.hasResumedFromProgress = true
-                        }
-                    }
-                    
-                    // Update playing state
-                    self.isPlaying = player.rate > 0
-                    
-                    // Update buffering state
-                    if let item = player.currentItem {
-                        if item.status == .readyToPlay && item.isPlaybackLikelyToKeepUp {
-                            self.isBuffering = false
-                        } else if item.status == .readyToPlay && !item.isPlaybackLikelyToKeepUp {
-                            self.isBuffering = true
-                        }
-                    }
-                    
-                    // Save progress every 5 seconds while playing
-                    if self.isPlaying && Int(self.currentTime) % 5 == 0 {
-                        self.saveCurrentProgress()
+                    // Auto-resume if we have saved progress and haven't resumed yet
+                    if !self.hasResumedFromProgress, let progress = self.savedProgress, !self.showResumePrompt {
+                        let cmTime = CMTime(seconds: progress.currentTime, preferredTimescale: 1)
+                        player.seek(to: cmTime)
+                        self.hasResumedFromProgress = true
                     }
                 }
+                
+                // Update playing state
+                self.isPlaying = player.rate > 0
+                
+                // Update buffering state
+                if let item = player.currentItem {
+                    if item.status == .readyToPlay && item.isPlaybackLikelyToKeepUp {
+                        self.isBuffering = false
+                    } else if item.status == .readyToPlay && !item.isPlaybackLikelyToKeepUp {
+                        self.isBuffering = true
+                    }
+                }
+                
+                // Save progress every 10 seconds while playing
+                if self.isPlaying && Int(self.currentTime) % 10 == 0 && self.currentTime > 0 {
+                    self.saveCurrentProgress()
+                }
             }
-            
-            // Don't auto-play if we're showing resume prompt
-            if !self.showResumePrompt {
-                self.player?.play()
-            }
+        }
+        
+        // Don't auto-play if we're showing resume prompt
+        if !showResumePrompt {
+            self.player?.play()
         }
     }
     
@@ -441,7 +537,7 @@ struct VideoDataPlayerView: View {
         player = nil
     }
     
-    // MARK: - Video URL Loading
+    // MARK: - Video URL Loading with Fixed Method Call
     
     private func loadVideoURL() {
         guard let embedURL = videoData.playback?.embed_url else {
@@ -451,81 +547,20 @@ struct VideoDataPlayerView: View {
             return
         }
         
-        extractVideoURLFromEmbed(embedURL)
-    }
-    
-    private func extractVideoURLFromEmbed(_ embedURL: String) {
-        guard let url = URL(string: embedURL) else {
-            DispatchQueue.main.async {
-                self.isLoadingVideo = false
-            }
-            return
-        }
+        print("Loading video URL from embed: \(embedURL)")
         
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            guard let data = data,
-                  let htmlString = String(data: data, encoding: .utf8) else {
-                DispatchQueue.main.async {
-                    self.isLoadingVideo = false
-                }
-                return
-            }
-            
-            // Multiple regex patterns to extract video URLs
-            let patterns = [
-                #"https://cstr-vod\.castr\.com/videos/[^/]+/[^/]+\.mp4/index\.m3u8"#,
-                #"https://[^"'\s]*\.m3u8[^"'\s]*"#,
-                #"https://cstr-vod\.castr\.com/videos/[^/]+/[^"'\s]*\.mp4"#,
-                #"src\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#,
-                #"file\s*[=:]\s*["']([^"']*\.(mp4|m3u8)[^"']*)"#
-            ]
-            
-            for pattern in patterns {
-                let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-                let range = NSRange(location: 0, length: htmlString.count)
-                
-                if let match = regex?.firstMatch(in: htmlString, options: [], range: range) {
-                    var extractedURL: String
-                    
-                    if match.numberOfRanges > 1 {
-                        let urlRange = Range(match.range(at: 1), in: htmlString)!
-                        extractedURL = String(htmlString[urlRange])
-                    } else {
-                        let urlRange = Range(match.range, in: htmlString)!
-                        extractedURL = String(htmlString[urlRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-                    }
-                    
-                    DispatchQueue.main.async {
-                        self.mp4URL = extractedURL
-                        self.isLoadingVideo = false
-                    }
-                    return
-                }
-            }
-            
-            // Fallback URL construction for Castr player
-            if embedURL.contains("player.castr.com/vod/") {
-                let components = embedURL.components(separatedBy: "/")
-                if let videoId = components.last {
-                    let possibleURLs = [
-                        "https://cstr-vod.castr.com/videos/\(videoId)/index.m3u8",
-                        "https://player.castr.io/\(videoId).mp4"
-                    ]
-                    
-                    for testURL in possibleURLs {
-                        DispatchQueue.main.async {
-                            self.mp4URL = testURL
-                            self.isLoadingVideo = false
-                        }
-                        return
-                    }
-                }
-            }
-            
+        // Use the API service method (fixed method name)
+        apiService.extractMP4URL(from: embedURL) { extractedURL in
             DispatchQueue.main.async {
+                if let extractedURL = extractedURL {
+                    print("Successfully extracted video URL: \(extractedURL)")
+                    self.mp4URL = extractedURL
+                } else {
+                    print("Failed to extract video URL")
+                }
                 self.isLoadingVideo = false
             }
-        }.resume()
+        }
     }
     
     // MARK: - Video Control Functions
@@ -607,7 +642,7 @@ struct VideoDataPlayerView: View {
     }
 }
 
-// MARK: - Progress Slider with History
+// MARK: - Progress Slider with Enhanced History Display
 struct ProgressSliderWithHistory: View {
     @Binding var value: Double
     let maxValue: Double
@@ -625,7 +660,7 @@ struct ProgressSliderWithHistory: View {
                     .frame(height: 4)
                     .cornerRadius(2)
                 
-                // Previous watch progress (if any)
+                // Previous watch progress (if any) - shown in orange
                 if let progress = watchProgress, maxValue > 0 {
                     Rectangle()
                         .fill(Color.orange.opacity(0.6))
@@ -633,7 +668,7 @@ struct ProgressSliderWithHistory: View {
                         .cornerRadius(2)
                 }
                 
-                // Current progress track
+                // Current progress track - shown in red
                 Rectangle()
                     .fill(Color.red)
                     .frame(width: progressWidth(geometry.size.width), height: 4)
@@ -645,6 +680,14 @@ struct ProgressSliderWithHistory: View {
                     .frame(width: isFocused ? 16 : 12, height: isFocused ? 16 : 12)
                     .offset(x: progressWidth(geometry.size.width) - (isFocused ? 8 : 6))
                     .animation(.easeInOut(duration: 0.1), value: isFocused)
+                
+                // Previous position indicator (small orange circle)
+                if let progress = watchProgress, maxValue > 0 {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 8, height: 8)
+                        .offset(x: geometry.size.width * CGFloat(progress.currentTime / maxValue) - 4)
+                }
             }
         }
         .frame(height: 20)
