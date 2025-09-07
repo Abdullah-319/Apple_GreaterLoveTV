@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Show Detail View
+// MARK: - Show Detail View (Debug-Free Version)
 struct ShowDetailView: View {
     let show: Show
     let onEpisodeSelect: (Episode) -> Void
@@ -297,7 +297,7 @@ struct ShowDetailView: View {
     }
 }
 
-// MARK: - Episode Card
+// MARK: - Episode Card (Fixed for Better Playback)
 struct EpisodeCard: View {
     let episode: Episode
     let show: Show

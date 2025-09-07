@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Content View with Enhanced Navigation and Live Streaming Fix
+// MARK: - Content View with Enhanced Navigation and Fixed Player Issues
 struct ContentView: View {
     @StateObject private var apiService = CastrAPIService()
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -57,7 +57,6 @@ struct ContentView: View {
                             }
                         }
                         .onChange(of: selectedNavItem) { newValue in
-                            // Scroll to top when menu item changes
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 switch newValue {
                                 case "HOME":
@@ -113,7 +112,6 @@ struct NavigationBarWithProperFocus: View {
                         isSelected: selectedItem == item,
                         isFocused: focusedItem == item
                     ) {
-                        // Change page but maintain focus on navigation
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedItem = item
                             shouldMaintainFocus = true
@@ -130,17 +128,14 @@ struct NavigationBarWithProperFocus: View {
         .background(Color.black.opacity(0.95))
         .zIndex(1)
         .onChange(of: focusedItem) { newFocusedItem in
-            // Only navigate when focus changes if we're not maintaining focus
             if let newItem = newFocusedItem, newItem != selectedItem && !shouldMaintainFocus {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     selectedItem = newItem
                 }
             }
-            // Reset the maintain focus flag after processing
             shouldMaintainFocus = false
         }
         .onAppear {
-            // Set initial focus to the selected item
             if focusedItem == nil {
                 focusedItem = selectedItem
             }
@@ -171,15 +166,12 @@ struct HomeViewWithProperNavigation: View {
             
             ScrollView {
                 VStack(spacing: 80) {
-                    // Show continue watching section only if there are videos in progress
                     if !progressManager.getContinueWatchingVideos().isEmpty {
                         continueWatchingSection
                     }
                     
-                    // Live Streams Section
                     liveStreamsSection
                     
-                    // Featured Shows Section
                     featuredShowsSection
                 }
                 .padding(.horizontal, 80)
@@ -187,7 +179,6 @@ struct HomeViewWithProperNavigation: View {
             }
             .background(Color.black.opacity(0.8))
         }
-        // Fixed: Separated sheet presentations to avoid conflicts
         .sheet(isPresented: $showingLivePlayer) {
             if let stream = selectedLiveStream {
                 LiveTVPlayerView(stream: stream)
@@ -213,7 +204,6 @@ struct HomeViewWithProperNavigation: View {
         .focusable()
         .onMoveCommand { direction in
             if direction == .down {
-                // When coming from navigation, first focus should go to Smart CTA button
                 smartCTAFocused = true
             }
         }
@@ -258,7 +248,6 @@ struct HomeViewWithProperNavigation: View {
                             .foregroundColor(.white)
                             .padding(.top, 30)
                         
-                        // Smart CTA Button
                         smartCTAButton
                             .padding(.top, 50)
                     }
@@ -307,7 +296,6 @@ struct HomeViewWithProperNavigation: View {
             switch direction {
             case .down:
                 smartCTAFocused = false
-                // Next focus depends on what content exists
                 if !progressManager.getContinueWatchingVideos().isEmpty {
                     continueWatchingFocused = 0
                 } else {
@@ -315,7 +303,6 @@ struct HomeViewWithProperNavigation: View {
                 }
             case .up:
                 smartCTAFocused = false
-                // Move back to navigation
             default:
                 break
             }
@@ -396,7 +383,6 @@ struct HomeViewWithProperNavigation: View {
         }
     }
     
-    // MARK: - Live Streams Section
     private var liveStreamsSection: some View {
         VStack(alignment: .leading, spacing: 40) {
             HStack {
@@ -445,7 +431,6 @@ struct HomeViewWithProperNavigation: View {
                             switch direction {
                             case .up:
                                 liveStreamsFocused = nil
-                                // Go back to continue watching if it exists, otherwise to Smart CTA
                                 if !progressManager.getContinueWatchingVideos().isEmpty {
                                     continueWatchingFocused = 0
                                 } else {
@@ -459,7 +444,7 @@ struct HomeViewWithProperNavigation: View {
                                     liveStreamsFocused = index - 1
                                 }
                             case .right:
-                                if index < 1 { // Only 2 live streams (0 and 1)
+                                if index < 1 {
                                     liveStreamsFocused = index + 1
                                 }
                             default:
@@ -521,7 +506,6 @@ struct HomeViewWithProperNavigation: View {
                                     featuredShowsFocused = nil
                                     liveStreamsFocused = 0
                                 case .down:
-                                    // No section below Featured Shows
                                     break
                                 case .left:
                                     if index > 0 {

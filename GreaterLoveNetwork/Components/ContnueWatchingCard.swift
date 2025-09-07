@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Continue Watching Card
+// MARK: - Continue Watching Card (Debug-Free Version)
 struct ContinueWatchingCard: View {
     let videoData: VideoData
     let watchProgress: WatchProgress

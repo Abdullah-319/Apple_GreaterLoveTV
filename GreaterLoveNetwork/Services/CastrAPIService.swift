@@ -3,16 +3,16 @@ import Foundation
 import AVKit
 import UIKit
 
-// MARK: - Enhanced API Service for Shows and Episodes (Working Version)
+// MARK: - Enhanced API Service for Shows and Episodes (Fixed Debug-Free Version)
 class CastrAPIService: ObservableObject {
     private let baseURL = "https://api.castr.com/v2"
     private let accessToken = "5aLoKjrNjly4"
     private let secretKey = "UjTCq8wOj76vjXznGFzdbMRzAkFq6VlJElBQ"
     
     @Published var liveStreams: [LiveStream] = []
-    @Published var shows: [Show] = [] // renamed from videos
-    @Published var allEpisodes: [Episode] = [] // renamed from videoData
-    @Published var showCollections: [ShowCollection] = [] // renamed from categories
+    @Published var shows: [Show] = []
+    @Published var allEpisodes: [Episode] = []
+    @Published var showCollections: [ShowCollection] = []
     @Published var recordings: [Recording] = []
     @Published var featuredShows: [Show] = []
     @Published var featuredMinisters: [String: [Show]] = [:]
@@ -26,9 +26,9 @@ class CastrAPIService: ObservableObject {
     @Published var totalPages = 1
     @Published var hasMorePages = false
     
-    // Backward compatibility properties - FIXED TYPES
+    // Backward compatibility properties
     @Published var videos: [Show] = []
-    @Published var videoData: [VideoData] = [] // FIXED: Changed from [Episode] to [VideoData]
+    @Published var videoData: [VideoData] = []
     @Published var categories: [Category] = []
     
     private var authHeader: String {
@@ -39,14 +39,12 @@ class CastrAPIService: ObservableObject {
     }
     
     func fetchAllContent() {
-        testAuthentication()
-        addStaticLiveStreams() // Use the exact working method name
+        addStaticLiveStreams()
         fetchAllShowsWithPagination()
         fetchLiveStreams()
     }
     
     private func addStaticLiveStreams() {
-        // Use the EXACT working stream URLs
         let channel1 = LiveStream(
             _id: "static_channel_1",
             name: "Greater Love TV Channel 1",
@@ -83,26 +81,6 @@ class CastrAPIService: ObservableObject {
         
         DispatchQueue.main.async {
             self.liveStreams = [channel1, channel2]
-            print("Added working live streams: \(self.liveStreams.count)")
-            
-            // Debug: Print the URLs being used
-            for stream in self.liveStreams {
-                print("Stream: \(stream.name)")
-                print("HLS URL: \(stream.hls_url ?? "None")")
-                print("Best Stream URL: \(stream.bestStreamURL ?? "None")")
-            }
-        }
-    }
-    
-    private func testAuthentication() {
-        print("Testing authentication...")
-        print("Access Token: \(accessToken)")
-        print("Secret Key: \(secretKey)")
-        print("Auth Header: \(authHeader)")
-        
-        if let decodedData = Data(base64Encoded: authHeader.replacingOccurrences(of: "Basic ", with: "")),
-           let decodedString = String(data: decodedData, encoding: .utf8) {
-            print("Decoded credentials: \(decodedString)")
         }
     }
     
@@ -135,8 +113,6 @@ class CastrAPIService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        print("Making request to: \(url)")
-        
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
@@ -145,7 +121,6 @@ class CastrAPIService: ObservableObject {
                 }
                 
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("HTTP Status Code: \(httpResponse.statusCode)")
                     if httpResponse.statusCode == 401 {
                         self?.handleError("Authentication failed. Please check your API credentials.")
                         return
@@ -187,7 +162,7 @@ class CastrAPIService: ObservableObject {
                         self?.allEpisodes.append(contentsOf: pageEpisodes)
                     }
                     
-                    // Update backward compatibility properties - FIXED CONVERSION
+                    // Update backward compatibility properties
                     self?.videos = self?.shows ?? []
                     self?.videoData = (self?.allEpisodes ?? []).compactMap { episode in
                         return self?.convertEpisodeToVideoData(episode)
@@ -207,10 +182,7 @@ class CastrAPIService: ObservableObject {
                         self?.isLoadingMoreShows = false
                     }
                     
-                    print("Successfully loaded page \(page): \(enabledShows.count) shows, \(pageEpisodes.count) episodes")
-                    
                 } catch {
-                    print("Shows Decoding error: \(error)")
                     self?.handleError("Failed to decode shows: \(error.localizedDescription)")
                     if isInitialLoad {
                         self?.isLoading = false
@@ -284,9 +256,6 @@ class CastrAPIService: ObservableObject {
         }
         
         self.featuredMinisters = ministers
-        
-        print("Featured Shows: \(featuredShows.map { $0.displayName })")
-        print("Featured Ministers: \(featuredMinisters.keys.sorted())")
     }
     
     func fetchLiveStreams() {
@@ -303,20 +272,16 @@ class CastrAPIService: ObservableObject {
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("Live Streams Network Error: \(error.localizedDescription)")
                     return
                 }
                 
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("Live Streams HTTP Status Code: \(httpResponse.statusCode)")
                     if httpResponse.statusCode == 401 {
-                        print("Live Streams Authentication failed.")
                         return
                     }
                 }
                 
                 guard let data = data else {
-                    print("No live streams data received")
                     return
                 }
                 
@@ -324,9 +289,7 @@ class CastrAPIService: ObservableObject {
                     let streams = try JSONDecoder().decode([LiveStream].self, from: data)
                     let apiStreams = streams.filter { $0.enabled }
                     self?.liveStreams.append(contentsOf: apiStreams)
-                    print("Successfully loaded \(apiStreams.count) API live streams")
                 } catch {
-                    print("Live Streams Decoding error: \(error)")
                     do {
                         if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
                             if let dataArray = jsonObject["data"] as? [[String: Any]] {
@@ -334,11 +297,10 @@ class CastrAPIService: ObservableObject {
                                 let streams = try JSONDecoder().decode([LiveStream].self, from: jsonData)
                                 let apiStreams = streams.filter { $0.enabled }
                                 self?.liveStreams.append(contentsOf: apiStreams)
-                                print("Successfully loaded \(apiStreams.count) API live streams from data array")
                             }
                         }
                     } catch {
-                        print("Live Streams Parsing error: \(error.localizedDescription)")
+                        // Silently handle error
                     }
                 }
             }
@@ -349,10 +311,9 @@ class CastrAPIService: ObservableObject {
         errorMessage = message
         isLoading = false
         isLoadingMoreShows = false
-        print("Error: \(message)")
     }
     
-    func loadThumbnail(for episode: Episode) { // updated parameter type
+    func loadThumbnail(for episode: Episode) {
         // Set loading state
         DispatchQueue.main.async {
             self.thumbnailStates[episode._id] = .loading
@@ -383,7 +344,6 @@ class CastrAPIService: ObservableObject {
     
     // Backward compatibility method
     func loadThumbnail(for videoData: VideoData) {
-        // Convert VideoData to Episode for processing
         let episode = Episode(
             episodeId: videoData.dataId,
             fileName: videoData.fileName,
@@ -423,19 +383,33 @@ class CastrAPIService: ObservableObject {
         )
     }
     
+    // MARK: - Fixed MP4 URL Extraction with Better Error Handling
     func extractMP4URL(from embedURL: String, completion: @escaping (String?) -> Void) {
         guard let url = URL(string: embedURL) else {
             completion(nil)
             return
         }
         
-        URLSession.shared.dataTask(with: url) { data, response, error in
+        // Create URL session with timeout
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15.0
+        config.timeoutIntervalForResource = 30.0
+        let session = URLSession(configuration: config)
+        
+        session.dataTask(with: url) { data, response, error in
+            // Handle network errors
+            if let error = error {
+                completion(nil)
+                return
+            }
+            
             guard let data = data,
                   let htmlString = String(data: data, encoding: .utf8) else {
                 completion(nil)
                 return
             }
             
+            // Enhanced URL extraction patterns
             let patterns = [
                 #"https://cstr-vod\.castr\.com/videos/[^/]+/[^/]+\.mp4/index\.m3u8"#,
                 #"https://[^"'\s]*\.m3u8[^"'\s]*"#,
@@ -464,6 +438,7 @@ class CastrAPIService: ObservableObject {
                 }
             }
             
+            // Fallback pattern matching for Castr VOD URLs
             if embedURL.contains("player.castr.com/vod/") {
                 let components = embedURL.components(separatedBy: "/")
                 if let videoId = components.last {
@@ -574,7 +549,6 @@ class CastrAPIService: ObservableObject {
             show.displayName.lowercased().contains(lowercaseQuery) ||
             show.showCategory.rawValue.lowercased().contains(lowercaseQuery)
         }.sorted { show1, show2 in
-            // Prioritize exact matches, then by episode count
             let name1 = show1.displayName.lowercased()
             let name2 = show2.displayName.lowercased()
             
@@ -647,13 +621,12 @@ extension CastrAPIService {
         let groupedShows = Dictionary(grouping: shows) { $0.showCategory }
         
         for category in ShowCategory.allCases {
-            if category == .all { continue } // Skip "all" as it's already added
+            if category == .all { continue }
             
             if let showsInCategory = groupedShows[category], !showsInCategory.isEmpty {
                 collections.append(ShowCollection(
                     category: category,
                     shows: showsInCategory.sorted { show1, show2 in
-                        // Sort by episode count (descending) then by name
                         if show1.episodeCount == show2.episodeCount {
                             return show1.displayName < show2.displayName
                         }
@@ -696,7 +669,6 @@ extension CastrAPIService {
         
         // Group episodes by show category
         let groupedEpisodes = Dictionary(grouping: episodes) { episode in
-            // Find the show this episode belongs to
             let show = shows.first { show in
                 show.episodes.contains { $0._id == episode._id }
             }

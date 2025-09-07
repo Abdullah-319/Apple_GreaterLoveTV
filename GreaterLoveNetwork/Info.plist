@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Versioning -->
+  <key>CFBundleShortVersionString</key>
+  <string>2.0.1</string>
+  <key>CFBundleVersion</key>
+  <string>3</string>
+
+  <!-- Identification -->
+  <key>CFBundleIdentifier</key>
+  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleName</key>
+  <string>$(PRODUCT_NAME)</string>
+  <key>CFBundleDisplayName</key>
+  <string>Greater Love TV</string>
+  <key>CFBundleExecutable</key>
+  <string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundlePackageType</key>
+  <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+  <key>CFBundleSignature</key>
+  <string>????</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+
+  <!-- Category -->
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.video</string>
+
+  <!-- tvOS Requires Apple TV -->
+  <key>LSRequiresIPhoneOS</key>
+  <true/>
+
+  <!-- App Icon (using logo.png directly) -->
+  <key>CFBundleIcons</key>
+  <dict>
+    <key>CFBundlePrimaryIcon</key>
+    <string>logo.png</string>
+  </dict>
+
+  <!-- Top Shelf Image (required for tvOS) -->
+  <key>TVTopShelfImage</key>
+  <dict>
+    <key>TVTopShelfPrimaryImageWide</key>
+    <string>logo.png</string>
+  </dict>
+
+  <!-- Launch Screen -->
+  <key>UILaunchStoryboardName</key>
+  <string>LaunchScreen</string>
+
+  <!-- Localization -->
+  <key>CFBundleDevelopmentRegion</key>
+  <string>$(DEVELOPMENT_LANGUAGE)</string>
+
+  <!-- UI -->
+  <key>UIUserInterfaceStyle</key>
+  <string>Automatic</string>
+</dict>
+</plist>

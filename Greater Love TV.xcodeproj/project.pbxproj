@@ -24,10 +24,20 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		18D60D382E3226CC00DC2EDB /* GreaterLoveNetwork.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GreaterLoveNetwork.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		18D60D452E3226CE00DC2EDB /* GreaterLoveNetworkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GreaterLoveNetworkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		18D60D4F2E3226CE00DC2EDB /* GreaterLoveNetworkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GreaterLoveNetworkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		18D60D382E3226CC00DC2EDB /* Greater Love TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Greater Love TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		18D60D452E3226CE00DC2EDB /* Greater Love TVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Greater Love TVTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		18D60D4F2E3226CE00DC2EDB /* Greater Love TVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Greater Love TVUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		18F34C122E64CDA3009ED2AA /* Exceptions for "GreaterLoveNetwork" folder in "Greater Love TV" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 18D60D372E3226CC00DC2EDB /* Greater Love TV */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		184E79352E32E81E008EC96E /* Notes */ = {
@@ -37,6 +47,9 @@
 		};
 		18D60D3A2E3226CC00DC2EDB /* GreaterLoveNetwork */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				18F34C122E64CDA3009ED2AA /* Exceptions for "GreaterLoveNetwork" folder in "Greater Love TV" target */,
+			);
 			path = GreaterLoveNetwork;
 			sourceTree = "<group>";
 		};
@@ -79,9 +92,9 @@
 		18D60D392E3226CC00DC2EDB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				18D60D382E3226CC00DC2EDB /* GreaterLoveNetwork.app */,
-				18D60D452E3226CE00DC2EDB /* GreaterLoveNetworkTests.xctest */,
-				18D60D4F2E3226CE00DC2EDB /* GreaterLoveNetworkUITests.xctest */,
+				18D60D382E3226CC00DC2EDB /* Greater Love TV.app */,
+				18D60D452E3226CE00DC2EDB /* Greater Love TVTests.xctest */,
+				18D60D4F2E3226CE00DC2EDB /* Greater Love TVUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -89,9 +102,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */ = {
+		18D60D372E3226CC00DC2EDB /* Greater Love TV */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 18D60D592E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetwork" */;
+			buildConfigurationList = 18D60D592E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "Greater Love TV" */;
 			buildPhases = (
 				18D60D342E3226CC00DC2EDB /* Sources */,
 				18D60D352E3226CC00DC2EDB /* Frameworks */,
@@ -105,16 +118,16 @@
 				184E79352E32E81E008EC96E /* Notes */,
 				18D60D3A2E3226CC00DC2EDB /* GreaterLoveNetwork */,
 			);
-			name = GreaterLoveNetwork;
+			name = "Greater Love TV";
 			packageProductDependencies = (
 			);
 			productName = GreaterLoveNetwork;
-			productReference = 18D60D382E3226CC00DC2EDB /* GreaterLoveNetwork.app */;
+			productReference = 18D60D382E3226CC00DC2EDB /* Greater Love TV.app */;
 			productType = "com.apple.product-type.application";
 		};
-		18D60D442E3226CE00DC2EDB /* GreaterLoveNetworkTests */ = {
+		18D60D442E3226CE00DC2EDB /* Greater Love TVTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 18D60D5C2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkTests" */;
+			buildConfigurationList = 18D60D5C2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "Greater Love TVTests" */;
 			buildPhases = (
 				18D60D412E3226CE00DC2EDB /* Sources */,
 				18D60D422E3226CE00DC2EDB /* Frameworks */,
@@ -125,16 +138,16 @@
 			dependencies = (
 				18D60D472E3226CE00DC2EDB /* PBXTargetDependency */,
 			);
-			name = GreaterLoveNetworkTests;
+			name = "Greater Love TVTests";
 			packageProductDependencies = (
 			);
 			productName = GreaterLoveNetworkTests;
-			productReference = 18D60D452E3226CE00DC2EDB /* GreaterLoveNetworkTests.xctest */;
+			productReference = 18D60D452E3226CE00DC2EDB /* Greater Love TVTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		18D60D4E2E3226CE00DC2EDB /* GreaterLoveNetworkUITests */ = {
+		18D60D4E2E3226CE00DC2EDB /* Greater Love TVUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 18D60D5F2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkUITests" */;
+			buildConfigurationList = 18D60D5F2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "Greater Love TVUITests" */;
 			buildPhases = (
 				18D60D4B2E3226CE00DC2EDB /* Sources */,
 				18D60D4C2E3226CE00DC2EDB /* Frameworks */,
@@ -145,11 +158,11 @@
 			dependencies = (
 				18D60D512E3226CE00DC2EDB /* PBXTargetDependency */,
 			);
-			name = GreaterLoveNetworkUITests;
+			name = "Greater Love TVUITests";
 			packageProductDependencies = (
 			);
 			productName = GreaterLoveNetworkUITests;
-			productReference = 18D60D4F2E3226CE00DC2EDB /* GreaterLoveNetworkUITests.xctest */;
+			productReference = 18D60D4F2E3226CE00DC2EDB /* Greater Love TVUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -176,7 +189,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 18D60D332E3226CC00DC2EDB /* Build configuration list for PBXProject "GreaterLoveNetwork" */;
+			buildConfigurationList = 18D60D332E3226CC00DC2EDB /* Build configuration list for PBXProject "Greater Love TV" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -190,9 +203,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */,
-				18D60D442E3226CE00DC2EDB /* GreaterLoveNetworkTests */,
-				18D60D4E2E3226CE00DC2EDB /* GreaterLoveNetworkUITests */,
+				18D60D372E3226CC00DC2EDB /* Greater Love TV */,
+				18D60D442E3226CE00DC2EDB /* Greater Love TVTests */,
+				18D60D4E2E3226CE00DC2EDB /* Greater Love TVUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -248,12 +261,12 @@
 /* Begin PBXTargetDependency section */
 		18D60D472E3226CE00DC2EDB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */;
+			target = 18D60D372E3226CC00DC2EDB /* Greater Love TV */;
 			targetProxy = 18D60D462E3226CE00DC2EDB /* PBXContainerItemProxy */;
 		};
 		18D60D512E3226CE00DC2EDB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 18D60D372E3226CC00DC2EDB /* GreaterLoveNetwork */;
+			target = 18D60D372E3226CC00DC2EDB /* Greater Love TV */;
 			targetProxy = 18D60D502E3226CE00DC2EDB /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -383,21 +396,25 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = WCKGGWJ4H8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = GreaterLoveNetwork;
+				INFOPLIST_FILE = GreaterLoveNetwork/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Greater Love TV";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetwork;
+				MARKETING_VERSION = 3.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tulix.greaterlovetv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "";
@@ -412,21 +429,25 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = WCKGGWJ4H8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = GreaterLoveNetwork;
+				INFOPLIST_FILE = GreaterLoveNetwork/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Greater Love TV";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GreaterLove.GreaterLoveNetwork;
+				MARKETING_VERSION = 3.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tulix.greaterlovetv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "";
@@ -448,7 +469,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GreaterLoveNetwork.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GreaterLoveNetwork";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Greater Love TV.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Greater Love TV";
 				TVOS_DEPLOYMENT_TARGET = 18.5;
 			};
 			name = Debug;
@@ -466,7 +487,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GreaterLoveNetwork.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GreaterLoveNetwork";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Greater Love TV.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Greater Love TV";
 				TVOS_DEPLOYMENT_TARGET = 18.5;
 			};
 			name = Release;
@@ -506,7 +527,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		18D60D332E3226CC00DC2EDB /* Build configuration list for PBXProject "GreaterLoveNetwork" */ = {
+		18D60D332E3226CC00DC2EDB /* Build configuration list for PBXProject "Greater Love TV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				18D60D572E3226CE00DC2EDB /* Debug */,
@@ -515,7 +536,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		18D60D592E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetwork" */ = {
+		18D60D592E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "Greater Love TV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				18D60D5A2E3226CE00DC2EDB /* Debug */,
@@ -524,7 +545,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		18D60D5C2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkTests" */ = {
+		18D60D5C2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "Greater Love TVTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				18D60D5D2E3226CE00DC2EDB /* Debug */,
@@ -533,7 +554,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		18D60D5F2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "GreaterLoveNetworkUITests" */ = {
+		18D60D5F2E3226CE00DC2EDB /* Build configuration list for PBXNativeTarget "Greater Love TVUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				18D60D602E3226CE00DC2EDB /* Debug */,

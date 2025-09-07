@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Enhanced Home View with Fixed Live Streaming
+// MARK: - Enhanced Home View with Fixed Video/Live Stream Playback
 struct HomeView: View {
     @EnvironmentObject var apiService: CastrAPIService
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -42,7 +42,6 @@ struct HomeView: View {
         .focusable()
         .onMoveCommand { direction in
             if direction == .down {
-                // When coming from navigation, focus should go to Smart CTA button first
                 smartCTAFocused = true
             }
         }
@@ -54,8 +53,10 @@ struct HomeView: View {
         .sheet(isPresented: $showingVideoPlayer) {
             if let episode = selectedContent as? Episode {
                 VideoDataPlayerView(videoData: convertEpisodeToVideoData(episode))
+                    .environmentObject(apiService)
             } else if let videoData = selectedContent as? VideoData {
                 VideoDataPlayerView(videoData: videoData)
+                    .environmentObject(apiService)
             }
         }
         .sheet(isPresented: $showingShowDetail) {
@@ -69,7 +70,6 @@ struct HomeView: View {
             }
         }
         .onAppear {
-            // Refresh progress manager when view appears
             progressManager.objectWillChange.send()
         }
     }
@@ -162,7 +162,6 @@ struct HomeView: View {
             switch direction {
             case .down:
                 smartCTAFocused = false
-                // Next focus depends on what content exists
                 if !progressManager.getContinueWatchingVideos().isEmpty {
                     continueWatchingFocused = 0
                 } else {
@@ -170,7 +169,6 @@ struct HomeView: View {
                 }
             case .up:
                 smartCTAFocused = false
-                // Move back to navigation - will be handled by parent
             default:
                 break
             }
@@ -292,7 +290,6 @@ struct HomeView: View {
                             subtitle: "Greater Love TV \(index == 0 ? "I" : "II")",
                             imageName: index == 0 ? "GL_live_1" : "GL_live_2"
                         ) {
-                            // Fixed: Use separate state for live stream player
                             selectedLiveStream = stream
                             showingLivePlayer = true
                         }
@@ -301,7 +298,6 @@ struct HomeView: View {
                             switch direction {
                             case .up:
                                 liveStreamsFocused = nil
-                                // Go back to continue watching if it exists, otherwise to Smart CTA
                                 if !progressManager.getContinueWatchingVideos().isEmpty {
                                     continueWatchingFocused = 0
                                 } else {
@@ -315,7 +311,7 @@ struct HomeView: View {
                                     liveStreamsFocused = index - 1
                                 }
                             case .right:
-                                if index < 1 { // Only 2 live streams (0 and 1)
+                                if index < 1 {
                                     liveStreamsFocused = index + 1
                                 }
                             default:

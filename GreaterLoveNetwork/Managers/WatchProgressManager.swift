@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Enhanced Watch Progress Manager with Show Tracking
+// MARK: - Enhanced Watch Progress Manager (Debug-Free Version)
 class WatchProgressManager: ObservableObject {
     static let shared = WatchProgressManager()
     
@@ -11,7 +11,6 @@ class WatchProgressManager: ObservableObject {
     
     private init() {
         loadProgress()
-        // Migrate old progress data if needed
         migrateOldProgressData()
     }
     
@@ -21,14 +20,10 @@ class WatchProgressManager: ObservableObject {
     func updateProgress(for episodeId: String, currentTime: Double, duration: Double, episodeTitle: String, showName: String? = nil) {
         let progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0
         
-        print("Updating progress for episode: \(episodeTitle)")
-        print("Show: \(showName ?? "Unknown"), Progress: \(progressPercentage)%")
-        
         // Only save progress if episode is watched for more than 5% and less than 95%
         guard progressPercentage > 5 && progressPercentage < 95 else {
             // If episode is watched more than 95%, mark as completed and remove from continue watching
             if progressPercentage >= 95 {
-                print("Episode completed (\(progressPercentage)%), removing from continue watching")
                 removeProgress(for: episodeId)
             }
             return
@@ -47,7 +42,6 @@ class WatchProgressManager: ObservableObject {
         DispatchQueue.main.async {
             self.watchProgress[episodeId] = progress
             self.saveProgress()
-            print("Progress saved successfully for episode: \(episodeTitle)")
         }
     }
     
@@ -65,13 +59,8 @@ class WatchProgressManager: ObservableObject {
     func getContinueWatchingVideos() -> [WatchProgress] {
         let result = Array(watchProgress.values)
             .sorted { $0.lastWatched > $1.lastWatched }
-            .prefix(20) // Increased limit for more episodes
+            .prefix(20)
             .map { $0 }
-        
-        print("Getting continue watching videos: \(result.count) items")
-        for progress in result.prefix(5) {
-            print("- \(progress.episodeTitle) (\(progress.showName ?? "Unknown Show")) - \(Int(progress.progressPercentage))%")
-        }
         
         return result
     }
@@ -105,9 +94,7 @@ class WatchProgressManager: ObservableObject {
     /// Remove progress for a specific episode
     func removeProgress(for episodeId: String) {
         DispatchQueue.main.async {
-            if let removedProgress = self.watchProgress.removeValue(forKey: episodeId) {
-                print("Removed progress for episode: \(removedProgress.episodeTitle)")
-            }
+            self.watchProgress.removeValue(forKey: episodeId)
             self.saveProgress()
         }
     }
@@ -115,10 +102,8 @@ class WatchProgressManager: ObservableObject {
     /// Clear all watch progress
     func clearAllProgress() {
         DispatchQueue.main.async {
-            let count = self.watchProgress.count
             self.watchProgress.removeAll()
             self.saveProgress()
-            print("Cleared all progress (\(count) items)")
         }
     }
     
@@ -137,7 +122,6 @@ class WatchProgressManager: ObservableObject {
             }
             
             self.saveProgress()
-            print("Cleared progress for show: \(showName) (\(episodesToRemove.count) episodes)")
         }
     }
     
@@ -185,15 +169,13 @@ class WatchProgressManager: ObservableObject {
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(watchProgress)
             userDefaults.set(data, forKey: progressKey)
-            print("Successfully saved \(watchProgress.count) progress items")
         } catch {
-            print("Failed to save watch progress: \(error)")
+            // Silently handle save errors
         }
     }
     
     private func loadProgress() {
         guard let data = userDefaults.data(forKey: progressKey) else {
-            print("No existing progress data found")
             return
         }
         
@@ -204,19 +186,13 @@ class WatchProgressManager: ObservableObject {
             
             DispatchQueue.main.async {
                 self.watchProgress = loadedProgress
-                print("Successfully loaded \(loadedProgress.count) progress items")
             }
         } catch {
-            print("Failed to load watch progress: \(error)")
-            // Try to migrate from old format
             migrateOldProgressData()
         }
     }
     
     private func migrateOldProgressData() {
-        print("Attempting to migrate old progress data...")
-        
-        // Try multiple old progress keys
         let oldProgressKeys = [
             "episode_watch_progress",
             "video_watch_progress",
@@ -239,7 +215,6 @@ class WatchProgressManager: ObservableObject {
                         migratedProgress[key] = progress
                         totalMigrated += 1
                     }
-                    print("Migrated \(newProgress.count) items from key: \(oldKey)")
                     continue
                 }
                 
@@ -270,25 +245,21 @@ class WatchProgressManager: ObservableObject {
                         migratedProgress[key] = newProgress
                         totalMigrated += 1
                     }
-                    print("Migrated \(oldProgress.count) items from old format key: \(oldKey)")
                 }
                 
                 // Remove old data after successful migration
                 userDefaults.removeObject(forKey: oldKey)
                 
             } catch {
-                print("Failed to migrate from key \(oldKey): \(error)")
+                // Silently handle migration errors
             }
         }
         
         if totalMigrated > 0 {
             DispatchQueue.main.async {
                 self.watchProgress = migratedProgress
-                self.saveProgress() // Save in new format
-                print("Successfully migrated \(totalMigrated) total watch progress items")
+                self.saveProgress()
             }
-        } else {
-            print("No progress data to migrate")
         }
     }
     
@@ -325,8 +296,6 @@ class WatchProgressManager: ObservableObject {
     
     /// Get the most frequently resumed episodes
     func getMostResumedEpisodes() -> [WatchProgress] {
-        // For now, this returns episodes with moderate progress (20-80%)
-        // In a full implementation, you'd track resume counts
         return Array(watchProgress.values)
             .filter { $0.progressPercentage >= 20 && $0.progressPercentage <= 80 }
             .sorted { $0.lastWatched > $1.lastWatched }
@@ -346,10 +315,8 @@ class WatchProgressManager: ObservableObject {
         var streaks: [String: Int] = [:]
         
         for (showName, episodes) in groupedProgress {
-            // Sort episodes by last watched date
             let sortedEpisodes = episodes.sorted { $0.lastWatched > $1.lastWatched }
             
-            // Count consecutive watching days
             var streak = 0
             var lastDate: Date?
             

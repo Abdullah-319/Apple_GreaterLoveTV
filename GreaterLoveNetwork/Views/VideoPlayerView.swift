@@ -1,7 +1,7 @@
 import SwiftUI
 import AVKit
 
-// MARK: - Enhanced Video Player with Continue Watching Support (Fixed)
+// MARK: - Enhanced Video Player with Fixed First-Time Playback
 struct VideoDataPlayerView: View {
     let videoData: VideoData
     @StateObject private var progressManager = WatchProgressManager.shared
@@ -21,6 +21,8 @@ struct VideoDataPlayerView: View {
     @State private var savedProgress: WatchProgress?
     @State private var hasAppeared = false
     @State private var showName: String?
+    @State private var hasSetupCompleted = false
+    @State private var videoSetupAttempts = 0
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -45,7 +47,7 @@ struct VideoDataPlayerView: View {
                 hasAppeared = true
                 findShowForVideo()
                 checkForSavedProgress()
-                loadVideoURL()
+                loadVideoURLWithRetry()
                 startControlsTimer()
             }
         }
@@ -59,15 +61,11 @@ struct VideoDataPlayerView: View {
     // MARK: - Find Show Name for Better Progress Tracking
     
     private func findShowForVideo() {
-        // Find the show that contains this episode
         if let show = apiService.findShow(containing: videoData._id) {
             showName = show.displayName
-            print("Found show for video: \(show.displayName)")
         } else {
-            // Fallback: try to extract show name from filename
             let filename = videoData.fileName.replacingOccurrences(of: ".mp4", with: "")
             
-            // Common patterns to extract show names
             let showPatterns = [
                 "CT Townsend",
                 "Truth Matters",
@@ -86,8 +84,6 @@ struct VideoDataPlayerView: View {
                     break
                 }
             }
-            
-            print("Extracted show name from filename: \(showName ?? "Unknown")")
         }
     }
     
@@ -155,8 +151,9 @@ struct VideoDataPlayerView: View {
                     toggleControlsVisibility()
                 }
                 .onAppear {
-                    if player == nil {
-                        setupPlayer(with: url)
+                    if !hasSetupCompleted {
+                        hasSetupCompleted = true
+                        setupPlayerWithDelay(with: url)
                     }
                 }
             
@@ -399,10 +396,8 @@ struct VideoDataPlayerView: View {
         showResumePrompt = false
         hasResumedFromProgress = true
         
-        // Set the current time to resume from
         currentTime = progress.currentTime
         
-        // If player is already set up, seek to the saved position
         if let player = player {
             let cmTime = CMTime(seconds: progress.currentTime, preferredTimescale: 1)
             player.seek(to: cmTime)
@@ -415,7 +410,6 @@ struct VideoDataPlayerView: View {
         hasResumedFromProgress = true
         currentTime = 0
         
-        // Remove the saved progress since user chose to start over
         progressManager.removeProgress(for: videoData._id)
         
         if let player = player {
@@ -429,11 +423,6 @@ struct VideoDataPlayerView: View {
         
         let episodeTitle = videoData.fileName.replacingOccurrences(of: ".mp4", with: "")
         
-        print("Saving progress for episode: \(episodeTitle)")
-        print("Show name: \(showName ?? "Unknown")")
-        print("Current time: \(currentTime), Duration: \(duration)")
-        
-        // Use the enhanced progress manager with show name
         progressManager.updateProgress(
             for: videoData._id,
             currentTime: currentTime,
@@ -443,12 +432,17 @@ struct VideoDataPlayerView: View {
         )
     }
     
-    // MARK: - Player Setup and Management
+    // MARK: - Fixed Player Setup with Proper URL Loading
+    
+    private func setupPlayerWithDelay(with url: URL) {
+        // Add delay to ensure proper initialization
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            self.setupPlayer(with: url)
+        }
+    }
     
     private func setupPlayer(with url: URL) {
         guard player == nil else { return }
-        
-        print("Setting up player with URL: \(url)")
         
         let playerItem = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: playerItem)
@@ -457,7 +451,7 @@ struct VideoDataPlayerView: View {
         player?.automaticallyWaitsToMinimizeStalling = true
         player?.allowsExternalPlayback = true
         
-        // Setup buffering observation
+        // Setup notifications
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemPlaybackStalled,
             object: playerItem,
@@ -466,7 +460,6 @@ struct VideoDataPlayerView: View {
             self.isBuffering = true
         }
         
-        // Setup ready to play observation
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemNewAccessLogEntry,
             object: playerItem,
@@ -490,15 +483,17 @@ struct VideoDataPlayerView: View {
                     // Auto-resume if we have saved progress and haven't resumed yet
                     if !self.hasResumedFromProgress, let progress = self.savedProgress, !self.showResumePrompt {
                         let cmTime = CMTime(seconds: progress.currentTime, preferredTimescale: 1)
-                        player.seek(to: cmTime)
+                        player.seek(to: cmTime) { completed in
+                            if completed {
+                                player.play()
+                            }
+                        }
                         self.hasResumedFromProgress = true
                     }
                 }
                 
-                // Update playing state
                 self.isPlaying = player.rate > 0
                 
-                // Update buffering state
                 if let item = player.currentItem {
                     if item.status == .readyToPlay && item.isPlaybackLikelyToKeepUp {
                         self.isBuffering = false
@@ -507,16 +502,25 @@ struct VideoDataPlayerView: View {
                     }
                 }
                 
-                // Save progress every 10 seconds while playing
                 if self.isPlaying && Int(self.currentTime) % 10 == 0 && self.currentTime > 0 {
                     self.saveCurrentProgress()
                 }
             }
         }
         
-        // Don't auto-play if we're showing resume prompt
-        if !showResumePrompt {
-            self.player?.play()
+        // Wait for player item to be ready before playing
+        playerItem.asset.loadValuesAsynchronously(forKeys: ["duration", "playable"]) {
+            DispatchQueue.main.async {
+                var error: NSError? = nil
+                let status = playerItem.asset.statusOfValue(forKey: "duration", error: &error)
+                
+                if status == .loaded {
+                    // Only auto-play if we're not showing resume prompt
+                    if !self.showResumePrompt {
+                        self.player?.play()
+                    }
+                }
+            }
         }
     }
     
@@ -537,9 +541,9 @@ struct VideoDataPlayerView: View {
         player = nil
     }
     
-    // MARK: - Video URL Loading with Fixed Method Call
+    // MARK: - Fixed Video URL Loading with Retry Logic
     
-    private func loadVideoURL() {
+    private func loadVideoURLWithRetry() {
         guard let embedURL = videoData.playback?.embed_url else {
             DispatchQueue.main.async {
                 self.isLoadingVideo = false
@@ -547,18 +551,25 @@ struct VideoDataPlayerView: View {
             return
         }
         
-        print("Loading video URL from embed: \(embedURL)")
-        
-        // Use the API service method (fixed method name)
+        attemptURLExtraction(embedURL: embedURL, attempt: 1)
+    }
+    
+    private func attemptURLExtraction(embedURL: String, attempt: Int) {
         apiService.extractMP4URL(from: embedURL) { extractedURL in
             DispatchQueue.main.async {
                 if let extractedURL = extractedURL {
-                    print("Successfully extracted video URL: \(extractedURL)")
                     self.mp4URL = extractedURL
+                    self.isLoadingVideo = false
+                } else if attempt < 3 {
+                    // Retry up to 3 times with increasing delay
+                    let delay = Double(attempt) * 1.0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        self.attemptURLExtraction(embedURL: embedURL, attempt: attempt + 1)
+                    }
                 } else {
-                    print("Failed to extract video URL")
+                    // All attempts failed
+                    self.isLoadingVideo = false
                 }
-                self.isLoadingVideo = false
             }
         }
     }

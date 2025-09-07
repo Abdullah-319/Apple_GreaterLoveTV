@@ -10,9 +10,9 @@ struct LiveTVPlayerView: View {
     @State private var connectionState: ConnectionState = .connecting
     @State private var retryAttempts = 0
     @State private var showRetryButton = false
-    @State private var debugInfo: [String] = []
     @State private var lastTimeUpdate: Double = 0
     @State private var stuckFrameDetected = false
+    @State private var hasSetupCompleted = false
     @Environment(\.presentationMode) var presentationMode
     
     enum ConnectionState {
@@ -34,11 +34,12 @@ struct LiveTVPlayerView: View {
                 // Main video player
                 VideoPlayer(player: player)
                     .onAppear {
-                        addDebugLog("VideoPlayer appeared - setting up live player")
-                        setupLivePlayer(with: url)
+                        if !hasSetupCompleted {
+                            hasSetupCompleted = true
+                            setupLivePlayerWithDelay(with: url)
+                        }
                     }
                     .onDisappear {
-                        addDebugLog("VideoPlayer disappeared - cleaning up")
                         cleanupPlayer()
                     }
                 
@@ -49,9 +50,6 @@ struct LiveTVPlayerView: View {
                 
                 // Top navigation overlay (always visible)
                 topNavigationOverlay
-                
-                // Debug overlay (bottom right)
-                debugOverlay
                 
             } else {
                 noURLErrorView
@@ -121,7 +119,6 @@ struct LiveTVPlayerView: View {
         VStack {
             HStack {
                 Button(action: {
-                    addDebugLog("Back button pressed")
                     presentationMode.wrappedValue.dismiss()
                 }) {
                     HStack(spacing: 8) {
@@ -167,30 +164,6 @@ struct LiveTVPlayerView: View {
         }
     }
     
-    private var debugOverlay: some View {
-        VStack {
-            Spacer()
-            
-            HStack {
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    ForEach(Array(debugInfo.suffix(5).enumerated()), id: \.offset) { index, log in
-                        Text(log)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.yellow)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Color.black.opacity(0.8))
-                            .cornerRadius(4)
-                    }
-                }
-                .padding(.trailing, 20)
-                .padding(.bottom, 100)
-            }
-        }
-    }
-    
     private var noURLErrorView: some View {
         VStack(spacing: 40) {
             Image(systemName: "tv.circle")
@@ -227,19 +200,6 @@ struct LiveTVPlayerView: View {
     }
     
     // MARK: - Helper Methods
-    
-    private func addDebugLog(_ message: String) {
-        let timestamp = DateFormatter.timeFormatter.string(from: Date())
-        let logMessage = "[\(timestamp)] \(message)"
-        print("LIVE_STREAM_DEBUG: \(logMessage)")
-        
-        DispatchQueue.main.async {
-            self.debugInfo.append(logMessage)
-            if self.debugInfo.count > 20 {
-                self.debugInfo.removeFirst()
-            }
-        }
-    }
     
     private func getConnectionStatusText() -> String {
         switch connectionState {
@@ -288,77 +248,77 @@ struct LiveTVPlayerView: View {
         }
     }
     
-    // MARK: - Fixed Player Setup Method
+    // MARK: - Fixed Player Setup with Proper Initialization
     
-    private func setupLivePlayer(with url: URL) {
-        addDebugLog("Setting up live player with URL: \(url.absoluteString)")
-        
+    private func setupLivePlayerWithDelay(with url: URL) {
         connectionState = .connecting
         stuckFrameDetected = false
         
-        // CRITICAL FIX: Create player item with live URL modification
+        // Add a small delay to ensure proper initialization
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.setupLivePlayer(with: url)
+        }
+    }
+    
+    private func setupLivePlayer(with url: URL) {
+        // Create optimized live URL
         let liveURL = ensureLiveURL(url)
         let playerItem = AVPlayerItem(url: liveURL)
-        addDebugLog("Created AVPlayerItem with live URL: \(liveURL.absoluteString)")
         
-        // AGGRESSIVE LIVE SETTINGS - This fixes the stuck frame issue
-        playerItem.preferredForwardBufferDuration = 0.0  // Zero buffer for live
+        // Configure for live streaming with minimal buffering
+        playerItem.preferredForwardBufferDuration = 1.0
         playerItem.preferredPeakBitRate = 0
         
         // Create player
         player = AVPlayer(playerItem: playerItem)
-        addDebugLog("Created AVPlayer")
         
         guard let player = player else {
-            addDebugLog("ERROR: Failed to create AVPlayer")
             connectionState = .failed
             showRetryButton = true
             return
         }
         
-        // CRITICAL LIVE SETTINGS
+        // Configure player for live streaming
         player.automaticallyWaitsToMinimizeStalling = false
         player.allowsExternalPlayback = false
         
-        addDebugLog("Configured aggressive live settings")
+        // Setup comprehensive monitoring
+        setupPlayerMonitoring(for: player, playerItem: playerItem)
         
-        // Setup monitoring
-        setupAdvancedPlayerMonitoring(for: player, playerItem: playerItem)
-        
-        // MAIN FIX: Wait for asset to load, then seek to live edge BEFORE playing
+        // Wait for asset to load before attempting to play
         playerItem.asset.loadValuesAsynchronously(forKeys: ["duration", "tracks"]) {
             DispatchQueue.main.async {
                 var error: NSError? = nil
                 let status = playerItem.asset.statusOfValue(forKey: "duration", error: &error)
                 
-                self.addDebugLog("Asset loading status: \(status.rawValue)")
-                
                 if status == .loaded {
-                    self.addDebugLog("Asset loaded successfully - seeking to live edge first")
-                    self.seekToLiveEdgeThenPlay()
+                    // Asset loaded successfully - start playback
+                    self.startLivePlayback()
                 } else {
-                    self.addDebugLog("Asset loading failed or cancelled - trying direct play")
+                    // Asset loading failed - try direct play anyway
                     player.play()
                     
-                    // Fallback: seek after a delay
+                    // Check after delay if playback started
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                        self.forceSeekToLiveEdge()
+                        if player.rate == 0 {
+                            self.seekToLiveEdgeAndPlay()
+                        }
                     }
                 }
             }
         }
     }
     
-    private func setupAdvancedPlayerMonitoring(for player: AVPlayer, playerItem: AVPlayerItem) {
-        addDebugLog("Setting up player monitoring...")
+    private func setupPlayerMonitoring(for player: AVPlayer, playerItem: AVPlayerItem) {
+        // Remove existing observers first
+        NotificationCenter.default.removeObserver(self)
         
-        // Comprehensive notification setup
+        // Setup notifications for live streaming
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemPlaybackStalled,
             object: playerItem,
             queue: .main
         ) { _ in
-            self.addDebugLog("NOTIFICATION: Playback stalled")
             DispatchQueue.main.async {
                 self.connectionState = .buffering
                 self.handleStreamStall()
@@ -370,7 +330,6 @@ struct LiveTVPlayerView: View {
             object: playerItem,
             queue: .main
         ) { _ in
-            self.addDebugLog("NOTIFICATION: New access log entry - stream working")
             DispatchQueue.main.async {
                 self.connectionState = .connected
                 self.isBuffering = false
@@ -386,27 +345,24 @@ struct LiveTVPlayerView: View {
             queue: .main
         ) { notification in
             if let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error {
-                self.addDebugLog("NOTIFICATION: Failed to play - \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     self.handleStreamError(error)
                 }
             }
         }
         
-        // Enhanced time observer with stuck frame detection
+        // Setup time observer for monitoring
         playerTimeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
+            forInterval: CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC)),
             queue: .main
         ) { time in
             DispatchQueue.main.async {
-                self.monitorPlayerHealthWithDebug(currentTime: time.seconds)
+                self.monitorPlayerHealth(currentTime: time.seconds)
             }
         }
-        
-        addDebugLog("Player monitoring setup complete")
     }
     
-    private func monitorPlayerHealthWithDebug(currentTime: Double) {
+    private func monitorPlayerHealth(currentTime: Double) {
         guard let player = player,
               let currentItem = player.currentItem else {
             return
@@ -416,364 +372,216 @@ struct LiveTVPlayerView: View {
         let isLikelyToKeepUp = currentItem.isPlaybackLikelyToKeepUp
         let isBufferEmpty = currentItem.isPlaybackBufferEmpty
         let rate = player.rate
-        let loadedTimeRanges = currentItem.loadedTimeRanges
-        let seekableTimeRanges = currentItem.seekableTimeRanges
-        
-        // Enhanced logging every 3 seconds
-        let now = Date().timeIntervalSince1970
-        if now - lastTimeUpdate > 3.0 {
-            addDebugLog("Monitor: Status=\(statusString(status)), Rate=\(rate), Time=\(currentTime)")
-            addDebugLog("Monitor: KeepUp=\(isLikelyToKeepUp), BufferEmpty=\(isBufferEmpty)")
-            addDebugLog("Monitor: Loaded=\(loadedTimeRanges.count), Seekable=\(seekableTimeRanges.count)")
-            
-            // Log seekable range details
-            if !seekableTimeRanges.isEmpty {
-                let range = seekableTimeRanges.last?.timeRangeValue
-                let start = range?.start.seconds ?? 0
-                let duration = range?.duration.seconds ?? 0
-                addDebugLog("Monitor: Seekable range: \(start) to \(start + duration)")
-            }
-            
-            lastTimeUpdate = now
-        }
-        
-        // Detect various stuck conditions
-        if status == .readyToPlay && rate == 0 && currentTime > 0 && !stuckFrameDetected {
-            addDebugLog("ISSUE: Player ready but not playing - forcing play")
-            player.play()
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                if player.rate == 0 {
-                    self.addDebugLog("ISSUE: Force play failed - seeking to live edge")
-                    self.forceSeekToLiveEdge()
-                }
-            }
-        }
         
         switch status {
         case .readyToPlay:
             if isLikelyToKeepUp && rate > 0 && currentTime > 0 {
                 if connectionState != .connected {
-                    addDebugLog("SUCCESS: Stream playing successfully")
                     connectionState = .connected
                     isBuffering = false
                     stuckFrameDetected = false
                 }
             } else if isBufferEmpty || !isLikelyToKeepUp {
                 if connectionState == .connected {
-                    addDebugLog("Stream buffering...")
                     connectionState = .buffering
                     isBuffering = true
                 }
             }
             
-        case .failed:
-            let errorMsg = currentItem.error?.localizedDescription ?? "Unknown error"
-            addDebugLog("Player failed: \(errorMsg)")
-            handleStreamError(currentItem.error ?? NSError(domain: "LiveStream", code: -1, userInfo: nil))
-            
-        case .unknown:
-            // Status unknown is normal initially, but problematic if it persists
-            if now - lastTimeUpdate > 10.0 && currentTime > 0 {
-                addDebugLog("WARNING: Status unknown for too long - may need restart")
-                if !seekableTimeRanges.isEmpty {
-                    forceSeekToLiveEdge()
+            // Check for stuck frame condition
+            if rate == 0 && currentTime > 0 && !stuckFrameDetected {
+                player.play()
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    if player.rate == 0 {
+                        self.seekToLiveEdgeAndPlay()
+                    }
                 }
             }
             
+        case .failed:
+            handleStreamError(currentItem.error ?? NSError(domain: "LiveStream", code: -1, userInfo: nil))
+            
+        case .unknown:
+            // Wait for status to change
+            break
+            
         @unknown default:
-            addDebugLog("Player status: unknown default case")
             break
         }
     }
     
-    // MARK: - Critical Fix Methods
+    // MARK: - Fixed Playback Methods
+    
+    private func startLivePlayback() {
+        guard let player = player else { return }
+        
+        // Try to play immediately
+        player.play()
+        
+        // Check if playback started after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            if player.rate == 0 {
+                // If not playing, try seeking to live edge first
+                self.seekToLiveEdgeAndPlay()
+            } else {
+                // Playing successfully
+                self.connectionState = .connected
+            }
+        }
+    }
+    
+    private func seekToLiveEdgeAndPlay() {
+        guard let player = player,
+              let currentItem = player.currentItem else {
+            return
+        }
+        
+        let seekableRanges = currentItem.seekableTimeRanges
+        
+        if !seekableRanges.isEmpty,
+           let lastRange = seekableRanges.last?.timeRangeValue {
+            
+            // Calculate live edge (end of seekable range)
+            let liveEdge = CMTimeAdd(lastRange.start, lastRange.duration)
+            
+            // Seek to live edge
+            player.seek(to: liveEdge) { completed in
+                DispatchQueue.main.async {
+                    if completed {
+                        // Now start playing from live edge
+                        player.play()
+                        
+                        // Verify playback started
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            if player.rate > 0 {
+                                self.connectionState = .connected
+                                self.stuckFrameDetected = false
+                            } else {
+                                // Try setting rate directly
+                                player.rate = 1.0
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                    if player.rate > 0 {
+                                        self.connectionState = .connected
+                                    } else {
+                                        self.connectionState = .failed
+                                        self.showRetryButton = true
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Seek failed, try direct play
+                        player.play()
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            if player.rate == 0 {
+                                self.connectionState = .failed
+                                self.showRetryButton = true
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // No seekable ranges, try direct play
+            player.play()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                if player.rate == 0 {
+                    // Try setting rate directly as last resort
+                    player.rate = 1.0
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        if player.rate == 0 {
+                            self.connectionState = .failed
+                            self.showRetryButton = true
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     private func ensureLiveURL(_ url: URL) -> URL {
         var urlString = url.absoluteString
         
         // Add live streaming parameters if not present
         if !urlString.contains("?") {
-            urlString += "?_HLS_msn=0&_HLS_part=0"  // Force live edge
+            urlString += "?_HLS_msn=0&_HLS_part=0"
         } else if !urlString.contains("_HLS_") {
             urlString += "&_HLS_msn=0&_HLS_part=0"
         }
         
-        addDebugLog("Modified URL for live streaming: \(urlString)")
         return URL(string: urlString) ?? url
-    }
-    
-    private func seekToLiveEdgeThenPlay() {
-        guard let player = player,
-              let currentItem = player.currentItem else {
-            addDebugLog("SeekThenPlay: No player or item")
-            return
-        }
-        
-        // Wait a moment for seekable ranges to populate
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            let seekableRanges = currentItem.seekableTimeRanges
-            self.addDebugLog("SeekThenPlay: Found \(seekableRanges.count) seekable ranges")
-            
-            if !seekableRanges.isEmpty,
-               let lastRange = seekableRanges.last?.timeRangeValue {
-                
-                // Calculate live edge
-                let liveEdge = CMTimeAdd(lastRange.start, lastRange.duration)
-                let liveEdgeSeconds = liveEdge.seconds
-                
-                self.addDebugLog("SeekThenPlay: Live edge at \(liveEdgeSeconds) seconds")
-                
-                // Seek to live edge first
-                player.seek(to: liveEdge) { completed in
-                    DispatchQueue.main.async {
-                        self.addDebugLog("SeekThenPlay: Seek completed: \(completed)")
-                        
-                        // NOW start playing from live edge
-                        player.play()
-                        self.addDebugLog("SeekThenPlay: Started playing from live edge")
-                        
-                        // Monitor if this worked
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                            let rate = player.rate
-                            let newTime = player.currentTime().seconds
-                            self.addDebugLog("SeekThenPlay: After 2s - Rate: \(rate), Time: \(newTime)")
-                            
-                            if rate > 0 && newTime > liveEdgeSeconds - 5 {
-                                self.addDebugLog("SUCCESS: Live stream playing from correct position")
-                                self.connectionState = .connected
-                                self.stuckFrameDetected = false
-                            } else {
-                                self.addDebugLog("FAILED: Still not playing correctly")
-                                self.tryForceRate()
-                            }
-                        }
-                    }
-                }
-            } else {
-                self.addDebugLog("SeekThenPlay: No seekable ranges - direct play")
-                player.play()
-                
-                // Check if this works
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    if player.rate == 0 {
-                        self.addDebugLog("Direct play failed - trying force rate")
-                        self.tryForceRate()
-                    }
-                }
-            }
-        }
-    }
-    
-    private func forceSeekToLiveEdge() {
-        guard let player = player,
-              let currentItem = player.currentItem else {
-            addDebugLog("ForceSeek: No player or item")
-            return
-        }
-        
-        let seekableRanges = currentItem.seekableTimeRanges
-        addDebugLog("ForceSeek: Found \(seekableRanges.count) seekable ranges")
-        
-        if !seekableRanges.isEmpty,
-           let lastRange = seekableRanges.last?.timeRangeValue {
-            let liveEdge = CMTimeAdd(lastRange.start, lastRange.duration)
-            let liveEdgeSeconds = liveEdge.seconds
-            
-            addDebugLog("ForceSeek: Seeking to live edge at \(liveEdgeSeconds) seconds")
-            
-            player.seek(to: liveEdge) { completed in
-                DispatchQueue.main.async {
-                    self.addDebugLog("ForceSeek: Seek completed: \(completed)")
-                    if completed {
-                        self.addDebugLog("ForceSeek: Starting playback after seek")
-                        player.play()
-                        
-                        // Verify playback started
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            let newRate = player.rate
-                            self.addDebugLog("ForceSeek: Rate after seek: \(newRate)")
-                            
-                            if newRate > 0 {
-                                self.connectionState = .connected
-                                self.stuckFrameDetected = false
-                            }
-                        }
-                    } else {
-                        self.addDebugLog("ForceSeek: Seek failed - trying alternative approach")
-                        self.tryAlternativePlayback()
-                    }
-                }
-            }
-        } else {
-            addDebugLog("ForceSeek: No seekable ranges - trying direct play")
-            player.play()
-        }
-    }
-    
-    private func tryForceRate() {
-        guard let player = player else { return }
-        
-        addDebugLog("Trying to force player rate to 1.0")
-        
-        // Pause first, then set rate directly
-        player.pause()
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            player.rate = 1.0
-            self.addDebugLog("Set rate directly to 1.0")
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                let actualRate = player.rate
-                let currentTime = player.currentTime().seconds
-                self.addDebugLog("ForceRate result: Rate=\(actualRate), Time=\(currentTime)")
-                
-                if actualRate > 0 {
-                    self.connectionState = .connected
-                    self.stuckFrameDetected = false
-                } else {
-                    self.addDebugLog("Force rate failed - stream may be incompatible")
-                    self.connectionState = .failed
-                    self.showRetryButton = true
-                }
-            }
-        }
-    }
-    
-    private func tryAlternativePlayback() {
-        guard let player = player else { return }
-        
-        addDebugLog("Trying alternative playback approach...")
-        
-        // Try setting a different rate
-        player.rate = 1.0
-        addDebugLog("Set player rate to 1.0 directly")
-        
-        // Wait and check
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            let newRate = player.rate
-            self.addDebugLog("Alternative: New rate is \(newRate)")
-            
-            if newRate > 0 {
-                self.connectionState = .connected
-                self.stuckFrameDetected = false
-            } else {
-                self.addDebugLog("Alternative failed - trying full restart")
-                self.performRetry()
-            }
-        }
-    }
-    
-    private func checkForStuckFrame() {
-        guard let player = player,
-              let currentItem = player.currentItem else {
-            addDebugLog("StuckCheck: No player or item")
-            return
-        }
-        
-        let rate = player.rate
-        let status = currentItem.status
-        let currentTime = player.currentTime().seconds
-        
-        addDebugLog("StuckCheck: Rate=\(rate), Status=\(statusString(status)), Time=\(currentTime)")
-        
-        // If player rate is 0 but we have seekable ranges, we're likely stuck
-        if rate == 0.0 && !currentItem.seekableTimeRanges.isEmpty {
-            addDebugLog("DETECTED: Stream stuck - forcing live edge seek")
-            stuckFrameDetected = true
-            connectionState = .stuckOnFrame
-            forceSeekToLiveEdge()
-        }
-    }
-    
-    private func forceStreamRestart() {
-        addDebugLog("Force restart requested by user")
-        
-        guard let hlsURL = stream.hls_url ?? stream.playback?.hls_url,
-              let url = URL(string: hlsURL) else {
-            addDebugLog("Force restart failed - no URL")
-            return
-        }
-        
-        stuckFrameDetected = false
-        connectionState = .connecting
-        
-        // Complete cleanup and restart
-        cleanupPlayer()
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.addDebugLog("Starting force restart setup...")
-            self.setupLivePlayer(with: url)
-        }
     }
     
     private func handleStreamStall() {
         guard let player = player,
               let currentItem = player.currentItem else {
-            addDebugLog("HandleStall: No player or item")
             return
         }
         
-        addDebugLog("Handling stream stall...")
-        
         let seekableRanges = currentItem.seekableTimeRanges
-        addDebugLog("Seekable ranges count: \(seekableRanges.count)")
         
         if !seekableRanges.isEmpty,
            let lastRange = seekableRanges.last?.timeRangeValue {
             let liveEdge = CMTimeAdd(lastRange.start, lastRange.duration)
-            let liveEdgeSeconds = liveEdge.seconds
-            
-            addDebugLog("Seeking to live edge: \(liveEdgeSeconds) seconds")
             
             player.seek(to: liveEdge) { completed in
                 DispatchQueue.main.async {
-                    self.addDebugLog("Seek completed: \(completed)")
                     if completed {
                         player.play()
-                        self.addDebugLog("Restarted playback after seek")
                         self.connectionState = .connected
                     } else {
-                        self.addDebugLog("Seek failed - trying direct play")
                         player.play()
                         self.connectionState = .buffering
                     }
                 }
             }
         } else {
-            addDebugLog("No seekable ranges - trying direct play restart")
             player.play()
             connectionState = .buffering
         }
     }
     
     private func handleStreamError(_ error: Error) {
-        addDebugLog("Stream error: \(error.localizedDescription)")
-        
         if retryAttempts < 3 {
-            addDebugLog("Scheduling automatic retry...")
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 self.performRetry()
             }
         } else {
-            addDebugLog("Max retries reached - showing manual retry button")
             connectionState = .failed
             showRetryButton = true
         }
     }
     
-    // MARK: - Single Retry Method (Fixed)
-    
-    private func performRetry() {
+    private func forceStreamRestart() {
         guard let hlsURL = stream.hls_url ?? stream.playback?.hls_url,
               let url = URL(string: hlsURL) else {
-            addDebugLog("Retry failed - no valid URL")
             connectionState = .failed
             showRetryButton = true
             return
         }
         
-        addDebugLog("Performing retry attempt \(retryAttempts + 1)")
+        stuckFrameDetected = false
+        connectionState = .connecting
+        
+        cleanupPlayer()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.setupLivePlayer(with: url)
+        }
+    }
+    
+    private func performRetry() {
+        guard let hlsURL = stream.hls_url ?? stream.playback?.hls_url,
+              let url = URL(string: hlsURL) else {
+            connectionState = .failed
+            showRetryButton = true
+            return
+        }
         
         retryAttempts += 1
         connectionState = .retrying
@@ -784,10 +592,8 @@ struct LiveTVPlayerView: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             if self.retryAttempts <= 3 {
-                self.addDebugLog("Setting up player for retry...")
                 self.setupLivePlayer(with: url)
             } else {
-                self.addDebugLog("All retry attempts exhausted")
                 self.connectionState = .failed
                 self.showRetryButton = true
             }
@@ -795,48 +601,16 @@ struct LiveTVPlayerView: View {
     }
     
     private func cleanupPlayer() {
-        addDebugLog("Starting player cleanup...")
-        
         if let timeObserver = playerTimeObserver {
             player?.removeTimeObserver(timeObserver)
             playerTimeObserver = nil
-            addDebugLog("Removed time observer")
         }
         
         NotificationCenter.default.removeObserver(self)
-        addDebugLog("Removed notification observers")
         
         player?.pause()
-        addDebugLog("Paused player")
-        
         player = nil
-        addDebugLog("Released player")
         
         isBuffering = false
-        addDebugLog("Player cleanup complete")
     }
-    
-    // MARK: - Helper Extensions
-    
-    private func statusString(_ status: AVPlayerItem.Status) -> String {
-        switch status {
-        case .unknown:
-            return "unknown"
-        case .readyToPlay:
-            return "readyToPlay"
-        case .failed:
-            return "failed"
-        @unknown default:
-            return "unknownDefault"
-        }
-    }
-}
-
-// MARK: - DateFormatter Extension for Debug Timestamps
-extension DateFormatter {
-    static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss.SSS"
-        return formatter
-    }()
 }
