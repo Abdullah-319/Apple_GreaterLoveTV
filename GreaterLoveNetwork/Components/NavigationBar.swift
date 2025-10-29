@@ -12,7 +12,7 @@ struct NavigationBar: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 12) {
-                    Image("tvos_logo")
+                    Image("tv_logo")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 200, height: 200)

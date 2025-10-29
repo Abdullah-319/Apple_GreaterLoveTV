@@ -6,6 +6,7 @@ import UIKit
 // MARK: - Enhanced API Service for Shows and Episodes (Fixed Debug-Free Version)
 class CastrAPIService: ObservableObject {
     private let baseURL = "https://api.castr.com/v2"
+    private let wordPressBaseURL = "https://greaterlove.tv/wp-json/myplugin/v1"
     private let accessToken = "5aLoKjrNjly4"
     private let secretKey = "UjTCq8wOj76vjXznGFzdbMRzAkFq6VlJElBQ"
     
@@ -40,7 +41,7 @@ class CastrAPIService: ObservableObject {
     
     func fetchAllContent() {
         addStaticLiveStreams()
-        fetchAllShowsWithPagination()
+        fetchWordPressVOD()
         fetchLiveStreams()
     }
     
@@ -84,8 +85,167 @@ class CastrAPIService: ObservableObject {
         }
     }
     
+    // MARK: - WordPress VOD API Methods
+
+    func fetchWordPressVOD() {
+        isLoading = true
+        print("🎬 Starting WordPress VOD fetch...")
+
+        guard let url = URL(string: "\(wordPressBaseURL)/castrvod") else {
+            handleError("Invalid WordPress VOD URL")
+            return
+        }
+
+        print("📡 Fetching from: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue("https://greaterlove.tv/", forHTTPHeaderField: "Referer")
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ Network Error: \(error.localizedDescription)")
+                    self?.handleError("Network Error: \(error.localizedDescription)")
+                    return
+                }
+
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("📊 HTTP Status Code: \(httpResponse.statusCode)")
+                }
+
+                guard let data = data else {
+                    print("❌ No data received")
+                    self?.handleError("No data received from WordPress API")
+                    return
+                }
+
+                print("✅ Data received: \(data.count) bytes")
+
+                // Try to print raw JSON for debugging
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    print("📄 Raw JSON (first 500 chars): \(String(jsonString.prefix(500)))")
+                }
+
+                do {
+                    let wpResponse = try JSONDecoder().decode(WordPressVODResponse.self, from: data)
+                    print("✅ Successfully decoded WordPress response")
+                    print("📊 Total shows: \(wpResponse.totalShows)")
+                    print("📊 Data keys count: \(wpResponse.data.count)")
+
+                    // Convert WordPress data to Show/Episode models
+                    let convertedShows = self?.convertWordPressDataToShows(wpResponse)
+                    print("✅ Converted \(convertedShows?.count ?? 0) shows")
+
+                    // Update shows and episodes
+                    self?.shows = convertedShows ?? []
+
+                    // Extract all episodes
+                    var allEps: [Episode] = []
+                    for show in convertedShows ?? [] {
+                        allEps.append(contentsOf: show.episodes)
+                    }
+                    self?.allEpisodes = allEps
+                    print("✅ Total episodes: \(allEps.count)")
+
+                    // Update backward compatibility properties
+                    self?.videos = self?.shows ?? []
+                    self?.videoData = allEps.compactMap { episode in
+                        return self?.convertEpisodeToVideoData(episode)
+                    }
+
+                    // Update collections and categories
+                    self?.createShowCollections(from: self?.shows ?? [])
+                    self?.createCategories(from: self?.allEpisodes ?? [])
+
+                    // Process featured content
+                    self?.processFeaturedContent()
+
+                    print("🎉 WordPress VOD fetch completed successfully!")
+                    print("📺 Shows: \(self?.shows.count ?? 0)")
+                    print("🎬 Episodes: \(self?.allEpisodes.count ?? 0)")
+
+                    self?.isLoading = false
+
+                } catch {
+                    print("❌ Decoding error: \(error)")
+                    if let decodingError = error as? DecodingError {
+                        switch decodingError {
+                        case .keyNotFound(let key, let context):
+                            print("Missing key: \(key.stringValue) - \(context.debugDescription)")
+                        case .typeMismatch(let type, let context):
+                            print("Type mismatch for type: \(type) - \(context.debugDescription)")
+                        case .valueNotFound(let type, let context):
+                            print("Value not found for type: \(type) - \(context.debugDescription)")
+                        case .dataCorrupted(let context):
+                            print("Data corrupted: \(context.debugDescription)")
+                        @unknown default:
+                            print("Unknown decoding error")
+                        }
+                    }
+                    self?.handleError("Failed to decode WordPress VOD data: \(error.localizedDescription)")
+                }
+            }
+        }.resume()
+    }
+
+    private func convertWordPressDataToShows(_ wpResponse: WordPressVODResponse) -> [Show] {
+        var shows: [Show] = []
+
+        for (showName, wpShow) in wpResponse.data {
+            // Convert WordPress episodes to Episode models
+            let episodes = wpShow.episodes.map { wpEpisode -> Episode in
+                let playback = EpisodePlayback(
+                    embed_url: wpEpisode.embedUrl,
+                    hls_url: wpEpisode.directUrl
+                )
+
+                // Convert WordPress date format to ISO8601
+                let creationTime: String
+                if let date = DateFormatter.wordpressDate.date(from: wpEpisode.createdAt) {
+                    let isoFormatter = ISO8601DateFormatter()
+                    creationTime = isoFormatter.string(from: date)
+                } else {
+                    creationTime = wpEpisode.createdAt
+                }
+
+                return Episode(
+                    episodeId: String(wpEpisode.id),
+                    fileName: wpEpisode.episodeName,
+                    enabled: true,
+                    bytes: 0,
+                    mediaInfo: nil,
+                    encodingRequired: false,
+                    precedence: wpEpisode.id,
+                    author: wpEpisode.showName,
+                    creationTime: creationTime,
+                    _id: String(wpEpisode.id),
+                    playback: playback
+                )
+            }
+
+            // Create Show model
+            let show = Show(
+                _id: showName.replacingOccurrences(of: " ", with: "_").lowercased(),
+                name: showName,
+                enabled: true,
+                type: "vod",
+                creation_time: episodes.first?.creationTime ?? ISO8601DateFormatter().string(from: Date()),
+                episodes: episodes,
+                user: "wordpress",
+                imageUrl: wpShow.imageUrl
+            )
+
+            shows.append(show)
+        }
+
+        // Sort shows alphabetically
+        return shows.sorted { $0.name < $1.name }
+    }
+
     // MARK: - Pagination Methods
-    
+
     func fetchAllShowsWithPagination() {
         isLoading = true
         currentPage = 1

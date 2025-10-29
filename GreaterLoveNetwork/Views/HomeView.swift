@@ -441,47 +441,86 @@ struct FeaturedShowCard: View {
         Button(action: action) {
             VStack(spacing: 20) {
                 ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [color, color.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 160, height: 160)
-                        .overlay(
-                            // Featured badge
-                            VStack {
-                                HStack {
-                                    Spacer()
-                                    
-                                    Image(systemName: "star.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.yellow)
-                                        .background(
-                                            Circle()
-                                                .fill(Color.black.opacity(0.6))
-                                                .frame(width: 24, height: 24)
-                                        )
-                                        .padding(8)
-                                }
-                                Spacer()
+                    // Show thumbnail or logo fallback
+                    if let imageUrl = show.imageUrl, !imageUrl.isEmpty {
+                        AsyncImage(url: URL(string: imageUrl)) { phase in
+                            switch phase {
+                            case .empty:
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 160, height: 160)
+                                    .overlay(
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    )
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(Circle())
+                            case .failure(_):
+                                // Fallback to logo
+                                Image("logo")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 160, height: 160)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.black.opacity(0.8))
+                                    )
+                                    .clipShape(Circle())
+                            @unknown default:
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 160, height: 160)
                             }
-                        )
-                    
-                    VStack(spacing: 8) {
-                        Image(systemName: show.showCategory.icon)
-                            .font(.system(size: 32, weight: .medium))
-                            .foregroundColor(.white)
-                        
-                        Text("\(show.episodeCount)")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
-                        
-                        Text("episodes")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                        }
+                    } else {
+                        // No imageUrl, use logo as fallback
+                        Image("logo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 160, height: 160)
+                            .background(
+                                Circle()
+                                    .fill(Color.black.opacity(0.8))
+                            )
+                            .clipShape(Circle())
+                    }
+
+                    // Featured badge overlay
+                    VStack {
+                        HStack {
+                            Spacer()
+
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.yellow)
+                                .background(
+                                    Circle()
+                                        .fill(Color.black.opacity(0.6))
+                                        .frame(width: 24, height: 24)
+                                )
+                                .padding(8)
+                        }
+                        Spacer()
+                    }
+
+                    // Episode count badge at bottom
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Text("\(show.episodeCount) eps")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.7))
+                                .cornerRadius(12)
+                                .padding(8)
+                        }
                     }
                 }
                 .scaleEffect(isFocused ? 1.05 : 1.0)

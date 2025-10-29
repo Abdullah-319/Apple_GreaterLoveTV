@@ -99,13 +99,14 @@ struct Show: Codable, Identifiable {
     let creation_time: String
     let episodes: [Episode] // renamed from data
     let user: String
-    
+    let imageUrl: String? // WordPress image_url
+
     enum CodingKeys: String, CodingKey {
-        case _id, name, enabled, type, creation_time, episodes = "data", user
+        case _id, name, enabled, type, creation_time, episodes = "data", user, imageUrl
     }
-    
+
     // Public initializer for programmatic creation
-    public init(_id: String, name: String, enabled: Bool, type: String, creation_time: String, episodes: [Episode], user: String) {
+    public init(_id: String, name: String, enabled: Bool, type: String, creation_time: String, episodes: [Episode], user: String, imageUrl: String? = nil) {
         self._id = _id
         self.name = name
         self.enabled = enabled
@@ -113,6 +114,12 @@ struct Show: Codable, Identifiable {
         self.creation_time = creation_time
         self.episodes = episodes
         self.user = user
+        self.imageUrl = imageUrl
+    }
+
+    // Computed property for thumbnail with fallback
+    var thumbnailImage: String {
+        return imageUrl ?? "logo"
     }
     
     // Computed properties for show organization
@@ -530,12 +537,80 @@ struct VideoPlayback: Codable {
     }
 }
 
+// MARK: - WordPress API Models
+struct WordPressVODResponse: Codable {
+    let status: String
+    let totalShows: Int
+    let data: [String: WordPressShow]
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case totalShows = "total_shows"
+        case data
+    }
+
+    public init(status: String, totalShows: Int, data: [String: WordPressShow]) {
+        self.status = status
+        self.totalShows = totalShows
+        self.data = data
+    }
+}
+
+struct WordPressShow: Codable {
+    let imageUrl: String
+    let episodes: [WordPressEpisode]
+
+    enum CodingKeys: String, CodingKey {
+        case imageUrl = "image_url"
+        case episodes
+    }
+
+    public init(imageUrl: String, episodes: [WordPressEpisode]) {
+        self.imageUrl = imageUrl
+        self.episodes = episodes
+    }
+}
+
+struct WordPressEpisode: Codable {
+    let id: Int
+    let showName: String
+    let episodeName: String
+    let embedUrl: String
+    let directUrl: String
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case showName = "show_name"
+        case episodeName = "episode_name"
+        case embedUrl = "embed_url"
+        case directUrl = "direct_url"
+        case createdAt = "created_at"
+    }
+
+    public init(id: Int, showName: String, episodeName: String, embedUrl: String, directUrl: String, createdAt: String) {
+        self.id = id
+        self.showName = showName
+        self.episodeName = episodeName
+        self.embedUrl = embedUrl
+        self.directUrl = directUrl
+        self.createdAt = createdAt
+    }
+}
+
 // MARK: - DateFormatter Extension
 extension DateFormatter {
     static let episodeDate: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
+        return formatter
+    }()
+
+    static let wordpressDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
 }

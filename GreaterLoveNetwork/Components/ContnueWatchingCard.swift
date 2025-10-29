@@ -31,24 +31,13 @@ struct ContinueWatchingCard: View {
                                 .frame(width: 300, height: 170)
                                 .clipped()
                         case .failed, .none:
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.blue.opacity(0.7),
-                                            Color.purple.opacity(0.5)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
+                            Image("logo")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
                                 .frame(width: 300, height: 170)
+                                .background(Color.black.opacity(0.8))
                                 .overlay(
                                     VStack(spacing: 10) {
-                                        Image(systemName: "play.circle.fill")
-                                            .font(.system(size: 40))
-                                            .foregroundColor(.white)
-                                        
                                         if let duration = videoData.mediaInfo?.durationMins {
                                             Text("\(duration) min")
                                                 .font(.system(size: 12, weight: .medium))

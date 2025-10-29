@@ -502,87 +502,109 @@ struct FixedNavigationShowGridCard: View {
         Button(action: action) {
             VStack(spacing: 20) {
                 ZStack {
-                    // Show background with category color and enhanced styling
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    show.showCategory.color.opacity(0.9),
-                                    show.showCategory.color.opacity(0.7),
-                                    show.showCategory.color.opacity(0.8)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 340, height: 200)
-                        .overlay(
-                            // Subtle pattern overlay
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(
-                                    RadialGradient(
-                                        colors: [
-                                            Color.white.opacity(0.1),
-                                            Color.clear
-                                        ],
-                                        center: .topLeading,
-                                        startRadius: 0,
-                                        endRadius: 150
+                    // Show thumbnail or logo fallback
+                    if let imageUrl = show.imageUrl, !imageUrl.isEmpty {
+                        AsyncImage(url: URL(string: imageUrl)) { phase in
+                            switch phase {
+                            case .empty:
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 340, height: 200)
+                                    .overlay(
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     )
-                                )
-                        )
-                        .overlay(
-                            // Episode count badge in top right
-                            VStack {
-                                HStack {
-                                    Spacer()
-                                    
-                                    Text("\(show.episodeCount)")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.black.opacity(0.6))
-                                        .cornerRadius(12)
-                                        .padding(12)
-                                }
-                                Spacer()
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 340, height: 200)
+                                    .clipped()
+                                    .cornerRadius(20)
+                                    .overlay(
+                                        // Dark overlay for text readability
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.black.opacity(0.4),
+                                                        Color.black.opacity(0.6)
+                                                    ],
+                                                    startPoint: .top,
+                                                    endPoint: .bottom
+                                                )
+                                            )
+                                    )
+                            case .failure(_):
+                                // Fallback to logo
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(Color.black.opacity(0.8))
+                                    .frame(width: 340, height: 200)
+                                    .overlay(
+                                        Image("logo")
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(width: 200, height: 120)
+                                    )
+                            @unknown default:
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 340, height: 200)
                             }
-                        )
-                    
-                    // Content overlay
-                    VStack(spacing: 16) {
-                        // Show icon with background
-                        ZStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.2))
-                                .frame(width: 60, height: 60)
-                            
-                            Image(systemName: show.showCategory.icon)
-                                .font(.system(size: 28, weight: .medium))
-                                .foregroundColor(.white)
                         }
-                        
+                    } else {
+                        // No imageUrl, use logo as fallback
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.black.opacity(0.8))
+                            .frame(width: 340, height: 200)
+                            .overlay(
+                                Image("logo")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 200, height: 120)
+                            )
+                    }
+
+                    // Episode count badge overlay
+                    VStack {
+                        HStack {
+                            Spacer()
+
+                            Text("\(show.episodeCount) eps")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.7))
+                                .cornerRadius(12)
+                                .padding(12)
+                        }
+                        Spacer()
+                    }
+
+                    // Show info overlay at bottom
+                    VStack {
+                        Spacer()
                         VStack(spacing: 8) {
                             // Show title
                             Text(show.displayName)
-                                .font(.system(size: 20, weight: .bold))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.white)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
-                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-                            
+                                .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+
                             // Category badge
                             Text(show.showCategory.rawValue)
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding(.horizontal, 12)
+                                .foregroundColor(.white.opacity(0.9))
+                                .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(Color.black.opacity(0.2))
+                                .background(Color.black.opacity(0.5))
                                 .cornerRadius(8)
                         }
+                        .padding(.bottom, 16)
                     }
-                    .padding(24)
                     
                     // Enhanced focus indicator
                     if isFocused {
